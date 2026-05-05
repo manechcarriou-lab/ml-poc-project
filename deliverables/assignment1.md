@@ -20,14 +20,30 @@ Les sites e-commerce convertissent en moyenne 1 à 3 % de leurs visiteurs. Ident
 
 ## Les sources de données
 
-**Dataset principal :** *Online Shoppers Purchasing Intention Dataset* (UCI Machine Learning Repository).
+### Fiche dataset (To-Do 2)
 
-- ~12 330 sessions web,
-- 17 features (10 numériques + 7 catégorielles) : nombre de pages produit visitées, durée de session, bounce rate, exit rate, page values, mois, type de visiteur, weekend, OS, navigateur, région, type de trafic, etc.
-- Variable cible : `Revenue` (booléen, achat ou non).
-- Source : <https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset>
-- Licence : CC BY 4.0.
-- Classes déséquilibrées (~15 % de positifs) → traitement à prévoir (class_weight, SMOTE, threshold tuning).
+| Champ | Valeur |
+|---|---|
+| **Nom du dataset** | Online Shoppers Purchasing Intention Dataset |
+| **Lien / source** | https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset (UCI Machine Learning Repository) |
+| **Licence** | CC BY 4.0 |
+| **Type de données** | Tabulaire — sessions web e-commerce ; ~12 330 lignes × 18 colonnes (10 features numériques, 7 catégorielles, 1 cible booléenne) |
+| **Variable cible envisagée** | `Revenue` — booléen, indique si la session s'est terminée par un achat (classification binaire) |
+| **Fichier local** | `data/online_shoppers_intention.csv` (téléchargé via le zip officiel UCI, ~1 MB ; non versionné, voir `.gitignore`) |
+
+### Features principales
+
+- **Comportement de navigation :** `Administrative`, `Administrative_Duration`, `Informational`, `Informational_Duration`, `ProductRelated`, `ProductRelated_Duration`
+- **Métriques d'engagement :** `BounceRates`, `ExitRates`, `PageValues`, `SpecialDay`
+- **Contexte :** `Month`, `OperatingSystems`, `Browser`, `Region`, `TrafficType`, `VisitorType`, `Weekend`
+
+### Limites éventuelles
+
+- **Déséquilibre de classes** (~15 % de `Revenue=True`) → métriques sensibles à l'imbalance à privilégier (F1, ROC-AUC, PR-AUC plutôt qu'accuracy brute).
+- **Pas d'identifiant utilisateur** : impossible de reconstituer le parcours d'un même client sur plusieurs sessions.
+- **Période de collecte non précisée** dans la doc UCI → on ne peut pas faire de split temporel propre, on s'en tient à un split aléatoire stratifié.
+- **Variable `Month` encodée en string sans année** : pas de dimension temporelle exploitable pour de la saisonnalité multi-annuelle.
+- **Origine géographique non documentée** : `Region` est anonymisée (codes 1-9), donc pas de jointure possible avec d'autres sources externes.
 
 ## Contexte ML
 
