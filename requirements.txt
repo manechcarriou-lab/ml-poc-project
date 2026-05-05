@@ -12,6 +12,7 @@ pandas
 plotly
 python-dotenv
 pmdarima
+python-pptx
 scikit-learn
 scipy
 seaborn
