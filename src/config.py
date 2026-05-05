@@ -30,12 +30,23 @@ MODEL_METRICS_FILE = RESULTS_DIR / "model_metrics.csv"
 STREAMLIT_HOST = "localhost"
 STREAMLIT_PORT = 8501
 
-# Students must replace this example with their trained models.
-# Each entry must point to a serialized model saved as `.joblib`, `.pkl`, or `.pickle`.
+# Trained model registry. Each entry points to a full sklearn Pipeline
+# (preprocessor + classifier) serialized as `.joblib` by `scripts/train.py`.
+# Rebuild with:  python scripts/train.py --trials 15
 MODELS = {
-    "model_a": {
-        "name": "Model A",
-        "description": "A simple baseline model.",
-        "path": MODELS_DIR / "model_a.pkl",
+    "logreg": {
+        "name": "Logistic Regression",
+        "description": "Baseline linear classifier — Optuna-tuned C, class_weight='balanced'.",
+        "path": MODELS_DIR / "logreg.joblib",
+    },
+    "random_forest": {
+        "name": "Random Forest",
+        "description": "Tree ensemble — Optuna-tuned depth/leaves/features, class_weight='balanced'.",
+        "path": MODELS_DIR / "random_forest.joblib",
+    },
+    "xgboost": {
+        "name": "XGBoost",
+        "description": "Gradient boosting — Optuna-tuned depth/lr/subsample, scale_pos_weight set from train balance.",
+        "path": MODELS_DIR / "xgboost.joblib",
     },
 }

@@ -74,6 +74,41 @@ Les sites e-commerce convertissent en moyenne 1 à 3 % de leurs visiteurs. Ident
 
 **Critère de succès du PoC :** dépasser un baseline naïf (toujours prédire la classe majoritaire ≈ 84 % d'accuracy mais 0 de recall sur la classe positive) et viser **F1 > 0.60** sur la classe positive avec le meilleur modèle.
 
+## Tracking & tuning — MLflow + Optuna
+
+### Pourquoi
+- **Optuna** : remplacer le `GridSearchCV` artisanal par une recherche bayésienne (TPE) qui converge plus vite vers une bonne config dans un espace continu (learning rate, C, gamma…).
+- **MLflow** : garder une trace persistante de chaque essai (params + métriques CV + métriques test + artefact modèle) pour pouvoir comparer les versions du dataset, les choix de features, les modèles, sans tableau Excel.
+
+### Comment c'est implémenté
+- Tout passe par `scripts/train.py`. Une seule commande pour relancer la pipeline complète :
+  ```bash
+  python scripts/train.py --trials 15
+  ```
+- Pour chaque famille (`logreg`, `random_forest`, `xgboost`) :
+  1. **Optuna** crée une étude `direction="maximize"` avec sampler TPE.
+  2. Chaque essai construit un **Pipeline complet** (`features.build_preprocessor()` + classifieur) — donc le préprocessing est `fit` uniquement sur les folds train de la CV : zéro fuite test.
+  3. La métrique d'objectif est le **F1 (classe positive) en CV stratifiée 3-fold**.
+  4. Chaque essai logge ses paramètres + scores dans **MLflow** (run nesté sous l'étude).
+  5. Le meilleur essai est refit sur tout le train, évalué sur le test, et sauvegardé en `models/<family>.joblib` (référencé dans `config.MODELS` pour `scripts/main.py`).
+
+### Espaces de recherche
+
+| Famille | Params Optuna |
+|---|---|
+| Logistic Regression | `C` (log-uniform 1e-3..1e2), `penalty=l2`, solver=lbfgs, `class_weight=balanced` |
+| Random Forest | `n_estimators` 100-400, `max_depth` 4-24, `min_samples_split` 2-20, `min_samples_leaf` 1-10, `max_features` ∈ {sqrt, log2, None}, `class_weight=balanced` |
+| XGBoost | `n_estimators` 150-600, `max_depth` 3-10, `learning_rate` log 1e-2..3e-1, `subsample` 0.6-1, `colsample_bytree` 0.6-1, `min_child_weight` 1-10, `gamma` 0-5, `reg_lambda` log 1e-3..10, `scale_pos_weight` calculé depuis le train |
+
+### Inspecter les runs
+
+```bash
+mlflow ui --backend-store-uri ./mlruns
+# puis http://localhost:5000
+```
+
+Les artefacts (`mlruns/`) sont **gitignorés** — chaque collaborateur relance le training localement.
+
 ## Livrable Streamlit
 
 L'app `src/app.py` présentera :

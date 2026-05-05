@@ -5,7 +5,9 @@ joblib
 jupyter
 loguru
 matplotlib
+mlflow
 numpy
+optuna
 pandas
 plotly
 python-dotenv

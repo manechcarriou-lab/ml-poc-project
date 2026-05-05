@@ -321,3 +321,15 @@ logs/*
 # Exclude data directory (raw data not pushed to GitHub)
 data/*
 !data/.gitkeep
+
+# Exclude MLflow tracking artifacts
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Exclude trained model binaries (rebuild via scripts/train.py)
+models/*
+!models/.gitkeep
+
+# Optuna SQLite study DB
+optuna_studies.db
