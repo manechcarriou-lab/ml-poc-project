@@ -333,3 +333,6 @@ models/*
 
 # Optuna SQLite study DB
 optuna_studies.db
+
+# Office lock files (Word/PowerPoint open document markers)
+~$*

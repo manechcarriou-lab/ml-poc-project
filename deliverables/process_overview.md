@@ -8,6 +8,21 @@ Ce document explique **chaque étape** du projet et **pourquoi** elle a été fa
 
 ---
 
+## TL;DR
+
+| Élément | Valeur |
+|---|---|
+| **Modèle retenu** | XGBoost (Optuna-tuned) |
+| **Métrique principale** | F1 sur la classe positive (achat) |
+| **Test F1** | **0.6542** (cible >0.60 → +9 %) |
+| **Test ROC-AUC** | **0.9303** |
+| **Bonus threshold-tuning** | F1 = 0.6706 à seuil 0.28 (vs 0.5 par défaut) |
+| **Reproductibilité** | 4 commandes (`git clone` → `train.py`) |
+
+> Stack : Python 3.13, scikit-learn (Pipeline + ColumnTransformer), Optuna (TPE), MLflow, XGBoost, Streamlit.
+
+---
+
 ## 1. Définition du problème
 
 ### 1.1 Question business
@@ -125,10 +140,14 @@ ml-poc-project/
 
 ### 5.2 Insights par segment
 
+![Conversion par segment](../plots/eda_conversion_by_segment.png)
+
 - **Mois forts** : Nov, Sep, Oct (saison Black Friday).
 - **New_Visitor** convertit **2× plus** que Returning_Visitor — contre-intuitif mais signal fort.
 - Certains `TrafficType` (8, 11) ont des taux de conversion jusqu'à 3× la moyenne.
 - Effet `Weekend` marginal.
+
+![Class imbalance](../plots/eda_target_balance.png)
 
 ### 5.3 Outils utilisés
 
@@ -251,13 +270,34 @@ mlflow ui --backend-store-uri ./mlruns
 | Random Forest | 0.6843 | 0.6292 | 0.7500 | 0.5419 | 0.9202 |
 | **XGBoost** | **0.6858** | **0.6542** | 0.7238 | 0.5969 | **0.9303** |
 
-### 8.2 Critère de succès
+### 8.2 Courbes ROC et Precision-Recall
+
+![ROC curves](../plots/roc_curves.png)
+![PR curves](../plots/pr_curves.png)
+
+XGBoost domine sur les deux courbes. Sur la PR curve, la précision reste >0.70 jusqu'à un recall de ~0.55 — c'est ce qui rend le modèle utilisable en pratique.
+
+### 8.3 Matrice de confusion + features importantes (XGBoost)
+
+![Confusion matrix XGBoost](../plots/confusion_matrix_xgboost.png)
+![Feature importance XGBoost](../plots/feature_importance_xgb.png)
+
+`PageValues` domine très largement l'importance — c'est la métrique qui agrège la « valeur » des pages vues, et c'est l'effet le plus prédictif d'une intention d'achat.
+
+### 8.4 Critère de succès
 
 > *Atteindre F1 > 0.60 sur la classe positive avec le meilleur modèle.*
 
 ✅ **XGBoost atteint F1 = 0.6542**, soit +**9 %** au-dessus du seuil cible.
 
-### 8.3 Lecture business
+### 8.5 Threshold tuning — gain « gratuit »
+
+![Threshold tuning XGBoost](../plots/threshold_tuning_xgb.png)
+
+Le seuil par défaut (0.5) n'est jamais le seuil optimal sur un dataset déséquilibré.
+**À threshold = 0.28**, F1 monte à **0.6706** (vs 0.6542 à 0.5) — soit +2.5 points sans réentraîner. Le seuil idéal dépend du trade-off métier (coût d'une action marketing vs valeur d'une conversion). Implémenté dans la démo Streamlit (`src/app.py` section 5).
+
+### 8.6 Lecture business
 
 - Sur 100 sessions identifiées comme « probable achat » par le modèle, **~72 sont vraiment des acheteurs** (precision 0.72).
 - Sur 100 acheteurs réels, on **en attrape ~60** (recall 0.60). On rate 40 % des conversions, mais on ne « gaspille » pas de budget marketing sur des non-acheteurs.
