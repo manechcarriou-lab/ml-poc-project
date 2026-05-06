@@ -16,6 +16,7 @@ python-pptx
 scikit-learn
 scipy
 seaborn
+skrub
 statsmodels
 streamlit
 xgboost

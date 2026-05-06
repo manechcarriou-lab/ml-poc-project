@@ -205,6 +205,26 @@ preprocessor = ColumnTransformer([
 
 Dans `notebooks/feature_engineering.ipynb`, on a testé une PCA à 95 % de variance et à 20 composantes. Conclusion : la perte en F1 (-2 à -4 points) ne justifie pas la compression sur ce dataset (82 features finales seulement). **Pas retenu** dans la pipeline finale, mais documenté dans le notebook.
 
+### 6.5 Comparaison des stratégies d'encodage — `notebooks/encoding_comparison.ipynb`
+
+Pour valider le choix d'**OneHotEncoder**, on a testé systématiquement 4 stratégies × 3 modèles, à hyperparamètres modèle figés (best params Optuna).
+
+| Encoding | LogReg | Random Forest | XGBoost | # features |
+|---|---|---|---|---|
+| **OneHot** (retenu) | **0.6559** | **0.6561** | 0.6544 | 82 |
+| **Ordinal** | 0.6443 | 0.6512 | **0.6760** ⭐ | 24 |
+| **Target** (CV-internal, leakage-safe) | 0.6457 | 0.6527 | 0.6682 | 24 |
+| skrub TableVectorizer | — | — | 0.6643 | ~30 |
+
+**Lecture :**
+
+- **OneHot** est le choix le plus robuste — gagne sur les modèles linéaires (LogReg) où il est indispensable, reste compétitif sur les arbres.
+- **Ordinal** gagne **+2 points de F1 sur XGBoost** : les arbres apprennent des splits non-monotones, donc la notion d'ordre arbitraire de l'encodage ne les biaise pas. Avec moins de features (24 vs 82), l'arbre a moins de bruit à arbitrer.
+- **TargetEncoder** est leakage-safe via la CV interne sklearn — gain marginal sur ce dataset.
+- **skrub TableVectorizer** est pratique pour automatiser l'encodage, équivalent à un OneHot manuel ici.
+
+**Optimisation future identifiée :** une variante `--encoder ordinal` dans `scripts/train.py` permettrait à XGBoost d'atteindre **F1 = 0.6760** en production. Combiné au threshold-tuning à 0.28 (cf. section 8.5), on pourrait viser **F1 ≈ 0.69**.
+
 ---
 
 ## 7. Modèles — `scripts/train.py`
