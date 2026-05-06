@@ -10,6 +10,18 @@
 
 ---
 
+## 🎬 Trois manières de découvrir ce projet
+
+| Format | Pour qui | Comment |
+|---|---|---|
+| **📊 Dashboard interactif** (recommandé) | Présentation orale, démo live | `streamlit run src/presentation.py` |
+| **🎤 Slides PowerPoint** | Soutenance traditionnelle | `deliverables/process_overview.pptx` (16 slides) |
+| **📄 Rapport texte** (ce document) | Lecture asynchrone, référence détaillée | `deliverables/RAPPORT_COMPLET.md` |
+
+> Le **dashboard Streamlit** reprend le même contenu que ce rapport, en version interactive avec plots Plotly, démo live, et navigation par sections — c'est le format conseillé pour présenter à l'oral.
+
+---
+
 ## 🎯 En 30 secondes
 
 | Question | Réponse |
@@ -869,6 +881,9 @@ python -m unittest tests/test_pipeline.py -v
 
 # Rebuild les slides
 python scripts/build_slides.py
+
+# Lancer le dashboard de présentation (couvre tout le projet)
+streamlit run src/presentation.py
 ```
 
 ### B. Structure du repo (rappel)
