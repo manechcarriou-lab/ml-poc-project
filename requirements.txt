@@ -16,7 +16,11 @@ python-pptx
 scikit-learn
 scipy
 seaborn
+shap
 skrub
+streamlit-extras
+streamlit-option-menu
+streamlit-shadcn-ui
 statsmodels
 streamlit
 xgboost

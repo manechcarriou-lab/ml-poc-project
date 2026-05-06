@@ -19,9 +19,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
+import streamlit_shadcn_ui as ui
+from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.colored_header import colored_header
+from streamlit_extras.stylable_container import stylable_container
+from streamlit_option_menu import option_menu
 
 from config import DATA_DIR, MODEL_METRICS_FILE, MODELS, PLOTS_DIR, RESULTS_DIR
+from features import add_engineered_features
 
 DATASET_PATH = DATA_DIR / "online_shoppers_intention.csv"
 TEST_PRED_PATH = RESULTS_DIR / "test_predictions.csv"
@@ -31,152 +36,216 @@ ROOT = Path(__file__).resolve().parent.parent
 # Theme
 # ---------------------------------------------------------------------------
 
-PRIMARY = "#1F3A5F"
-ACCENT = "#E67E22"
-SUCCESS = "#27AE60"
-GREY = "#7F8C8D"
-LIGHT = "#F4F6F8"
-DARK = "#2C3E50"
+PRIMARY = "#6366F1"        # indigo-500
+PRIMARY_DARK = "#4338CA"   # indigo-700 (for gradients)
+PRIMARY_LIGHT = "#A5B4FC"  # indigo-300
+ACCENT = "#EC4899"         # pink-500
+ACCENT_DARK = "#BE185D"    # pink-700
+SUCCESS = "#10B981"        # emerald-500
+WARNING = "#F59E0B"        # amber-500
+GREY = "#64748B"           # slate-500
+LIGHT = "#F1F5F9"          # slate-100
+LIGHTER = "#F8FAFC"        # slate-50
+DARK = "#0F172A"           # slate-900
+WHITE = "#FFFFFF"
 
-CHART_COLORS = ["#1F3A5F", "#E67E22", "#27AE60", "#8E44AD", "#16A085"]
+CHART_COLORS = ["#6366F1", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6"]
 
 
 def _inject_css() -> None:
-    st.markdown(
-        f"""
-        <style>
-            .stApp {{
-                background: linear-gradient(180deg, #FFFFFF 0%, {LIGHT} 100%);
-            }}
-            .hero-title {{
-                font-size: 2.6rem;
-                font-weight: 800;
-                color: {PRIMARY};
-                line-height: 1.1;
-                margin-bottom: 0.3rem;
-            }}
-            .hero-subtitle {{
-                font-size: 1.15rem;
-                color: {GREY};
-                margin-bottom: 1.5rem;
-            }}
-            .section-eyebrow {{
-                font-size: 0.75rem;
-                font-weight: 700;
-                letter-spacing: 0.18rem;
-                color: {ACCENT};
-                text-transform: uppercase;
-                margin-bottom: 0.4rem;
-            }}
-            .section-title {{
-                font-size: 1.85rem;
-                font-weight: 700;
-                color: {PRIMARY};
-                margin-bottom: 0.4rem;
-            }}
-            .section-lead {{
-                font-size: 1.05rem;
-                color: {DARK};
-                margin-bottom: 1.5rem;
-            }}
-            .insight-card {{
-                background: white;
-                border-left: 4px solid {ACCENT};
-                padding: 1rem 1.2rem;
-                border-radius: 6px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-                margin: 0.5rem 0;
-            }}
-            .insight-title {{
-                font-size: 0.7rem;
-                font-weight: 800;
-                color: {ACCENT};
-                letter-spacing: 0.15rem;
-                text-transform: uppercase;
-                margin-bottom: 0.3rem;
-            }}
-            .insight-body {{
-                font-size: 0.95rem;
-                color: {DARK};
-                line-height: 1.5;
-            }}
-            .kpi-card {{
-                background: white;
-                padding: 1rem 1.2rem;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                border-top: 3px solid {PRIMARY};
-                height: 100%;
-            }}
-            .kpi-value {{
-                font-size: 2rem;
-                font-weight: 800;
-                color: {PRIMARY};
-                line-height: 1;
-            }}
-            .kpi-label {{
-                font-size: 0.78rem;
-                color: {GREY};
-                text-transform: uppercase;
-                letter-spacing: 0.1rem;
-                margin-top: 0.4rem;
-                font-weight: 600;
-            }}
-            .kpi-delta {{
-                font-size: 0.85rem;
-                color: {SUCCESS};
-                margin-top: 0.3rem;
-                font-weight: 600;
-            }}
-            .pill {{
-                display: inline-block;
-                padding: 0.2rem 0.7rem;
-                border-radius: 999px;
-                background: {LIGHT};
-                color: {PRIMARY};
-                font-size: 0.75rem;
-                font-weight: 600;
-                margin-right: 0.4rem;
-                margin-bottom: 0.4rem;
-                border: 1px solid #E1E8EE;
-            }}
-            .pill-success {{
-                background: rgba(39, 174, 96, 0.1);
-                color: {SUCCESS};
-                border: 1px solid rgba(39, 174, 96, 0.3);
-            }}
-            .pill-accent {{
-                background: rgba(230, 126, 34, 0.1);
-                color: {ACCENT};
-                border: 1px solid rgba(230, 126, 34, 0.3);
-            }}
-            div.stButton > button {{
-                background: {PRIMARY};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 0.5rem 1.2rem;
-                font-weight: 600;
-            }}
-            div.stButton > button:hover {{
-                background: {ACCENT};
-                color: white;
-            }}
-            section[data-testid="stSidebar"] {{
-                background: {PRIMARY};
-            }}
-            section[data-testid="stSidebar"] * {{
-                color: white !important;
-            }}
-            .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {{
-                color: {ACCENT};
-                border-bottom-color: {ACCENT};
-            }}
-            footer, header {{visibility: hidden;}}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    css = f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        .stApp {{
+            background:
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.08), transparent 40%),
+                radial-gradient(circle at 100% 0%, rgba(236, 72, 153, 0.06), transparent 40%),
+                {LIGHTER};
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }}
+        .stApp, .stApp * {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }}
+        .section-eyebrow {{
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.22rem;
+            background: linear-gradient(90deg, {PRIMARY} 0%, {ACCENT} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }}
+        .section-title {{
+            font-size: 2rem;
+            font-weight: 800;
+            color: {DARK};
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }}
+        .section-lead {{
+            font-size: 1.08rem;
+            color: {GREY};
+            line-height: 1.6;
+            margin-bottom: 1.8rem;
+            max-width: 820px;
+        }}
+        .insight-card {{
+            background: {WHITE};
+            border: 1px solid #E2E8F0;
+            border-left: 4px solid {ACCENT};
+            padding: 1rem 1.2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.04);
+            margin: 0.6rem 0;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }}
+        .insight-card:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+        }}
+        .insight-title {{
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: {ACCENT};
+            letter-spacing: 0.16rem;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }}
+        .insight-body {{
+            font-size: 0.95rem;
+            color: {DARK};
+            line-height: 1.55;
+        }}
+        .kpi-card {{
+            background: {WHITE};
+            padding: 1.2rem 1.4rem;
+            border-radius: 14px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }}
+        .kpi-card::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, {PRIMARY} 0%, {ACCENT} 100%);
+        }}
+        .kpi-card:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.12);
+        }}
+        .kpi-value {{
+            font-size: 2.1rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, {PRIMARY} 0%, {PRIMARY_DARK} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }}
+        .kpi-label {{
+            font-size: 0.72rem;
+            color: {GREY};
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+            margin-top: 0.6rem;
+            font-weight: 600;
+        }}
+        .kpi-delta {{
+            font-size: 0.85rem;
+            color: {SUCCESS};
+            margin-top: 0.4rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }}
+        .pill {{
+            display: inline-block;
+            padding: 0.3rem 0.85rem;
+            border-radius: 999px;
+            background: {WHITE};
+            color: {DARK};
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-right: 0.4rem;
+            margin-bottom: 0.4rem;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }}
+        .pill-success {{
+            background: rgba(16, 185, 129, 0.08);
+            color: {SUCCESS};
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }}
+        .pill-accent {{
+            background: rgba(236, 72, 153, 0.08);
+            color: {ACCENT};
+            border: 1px solid rgba(236, 72, 153, 0.25);
+        }}
+        div.stButton > button {{
+            background: linear-gradient(135deg, {PRIMARY} 0%, {ACCENT} 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.55rem 1.4rem;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }}
+        div.stButton > button:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }}
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {DARK} 0%, #1E1B4B 100%);
+        }}
+        section[data-testid="stSidebar"] * {{
+            color: {WHITE} !important;
+        }}
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] a {{
+            color: {PRIMARY_LIGHT} !important;
+        }}
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {{
+            color: {PRIMARY} !important;
+            border-bottom-color: {PRIMARY} !important;
+        }}
+        .stTabs [data-baseweb="tab-list"] button {{
+            font-weight: 600;
+        }}
+        h1, h2, h3 {{
+            color: {DARK};
+            letter-spacing: -0.015em;
+        }}
+        [data-testid="stMetricValue"] {{
+            color: {PRIMARY};
+            font-weight: 800;
+        }}
+        code {{
+            background: rgba(99, 102, 241, 0.08) !important;
+            color: {PRIMARY_DARK} !important;
+            padding: 0.15rem 0.4rem !important;
+            border-radius: 4px !important;
+            font-size: 0.88em !important;
+        }}
+        pre code {{
+            background: {DARK} !important;
+            color: #E0E7FF !important;
+        }}
+        hr {{
+            border-color: rgba(99, 102, 241, 0.15) !important;
+            margin: 1.5rem 0 !important;
+        }}
+        footer, header {{visibility: hidden;}}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -185,55 +254,83 @@ def _inject_css() -> None:
 
 
 def _section_header(eyebrow: str, title: str, lead: str = "") -> None:
-    st.markdown(
-        f"""<div class="section-eyebrow">{eyebrow}</div>
-        <div class="section-title">{title}</div>
-        {f'<div class="section-lead">{lead}</div>' if lead else ''}""",
-        unsafe_allow_html=True,
+    lead_html = f'<div class="section-lead">{lead}</div>' if lead else ""
+    html = (
+        f'<div class="section-eyebrow">{eyebrow}</div>'
+        f'<div class="section-title">{title}</div>'
+        f'{lead_html}'
     )
+    st.markdown(html, unsafe_allow_html=True)
+    add_vertical_space(1)
+
+
+_KPI_COUNTER = {"i": 0}
 
 
 def _kpi(label: str, value: str, delta: str | None = None) -> None:
-    delta_html = f'<div class="kpi-delta">{delta}</div>' if delta else ""
-    st.markdown(
-        f"""<div class="kpi-card">
-            <div class="kpi-value">{value}</div>
-            <div class="kpi-label">{label}</div>
-            {delta_html}
-        </div>""",
-        unsafe_allow_html=True,
+    """Render a metric using shadcn UI's metric_card for a polished look."""
+    _KPI_COUNTER["i"] += 1
+    ui.metric_card(
+        title=label,
+        content=value,
+        description=delta or "",
+        key=f"kpi_{_KPI_COUNTER['i']}",
     )
 
 
 def _insight(title: str, body: str) -> None:
-    st.markdown(
-        f"""<div class="insight-card">
-            <div class="insight-title">{title}</div>
-            <div class="insight-body">{body}</div>
-        </div>""",
-        unsafe_allow_html=True,
+    html = (
+        f'<div class="insight-card">'
+        f'<div class="insight-title">{title}</div>'
+        f'<div class="insight-body">{body}</div>'
+        f'</div>'
     )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+_BADGE_COUNTER = {"i": 0}
 
 
 def _pills(items: list[tuple[str, str]]) -> None:
-    """items = [(label, kind), ...] where kind is 'default' | 'success' | 'accent'."""
-    html = ""
-    for label, kind in items:
-        cls = "pill" + ("" if kind == "default" else f" pill-{kind}")
-        html += f'<span class="{cls}">{label}</span>'
-    st.markdown(html, unsafe_allow_html=True)
+    """items = [(label, kind), ...] — uses shadcn UI badges.
+    kind in {default, success, accent} → mapped to {default, secondary, destructive}.
+    """
+    _BADGE_COUNTER["i"] += 1
+    variant_map = {
+        "default": "default",
+        "success": "secondary",
+        "accent": "destructive",
+    }
+    badge_list = [(label, variant_map.get(kind, "default")) for label, kind in items]
+    ui.badges(badge_list=badge_list, class_name="flex gap-2 flex-wrap",
+              key=f"badges_{_BADGE_COUNTER['i']}")
 
 
 def _plotly_clean(fig: go.Figure) -> go.Figure:
     fig.update_layout(
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, system-ui, sans-serif", color=DARK),
-        margin=dict(t=40, b=20, l=20, r=20),
-        legend=dict(bgcolor="rgba(255,255,255,0.9)"),
+        font=dict(family="Inter, system-ui, sans-serif", color=DARK, size=12),
+        margin=dict(t=50, b=30, l=30, r=30),
+        legend=dict(
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#E2E8F0",
+            borderwidth=1,
+        ),
+        title_font=dict(size=15, color=DARK, family="Inter"),
     )
-    fig.update_xaxes(gridcolor="#E1E8EE", linecolor="#E1E8EE")
-    fig.update_yaxes(gridcolor="#E1E8EE", linecolor="#E1E8EE")
+    fig.update_xaxes(
+        gridcolor="#F1F5F9",
+        linecolor="#E2E8F0",
+        zeroline=False,
+        tickfont=dict(color=GREY),
+    )
+    fig.update_yaxes(
+        gridcolor="#F1F5F9",
+        linecolor="#E2E8F0",
+        zeroline=False,
+        tickfont=dict(color=GREY),
+    )
     return fig
 
 
@@ -277,29 +374,39 @@ def _load_xgb():
 
 
 def section_cover() -> None:
-    st.markdown(
-        f"""<div style="
-            background: linear-gradient(135deg, {PRIMARY} 0%, #2C5282 100%);
-            border-radius: 16px;
-            padding: 2.8rem 2.4rem;
-            color: white;
-            margin-bottom: 1.5rem;
-        ">
-            <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.25rem; opacity: 0.85;">
-                MACHINE LEARNING — PROOF OF CONCEPT · ALBERT SCHOOL
-            </div>
-            <div style="font-size: 2.6rem; font-weight: 800; margin-top: 1rem; line-height: 1.15;">
-                Prédire la conversion d'un visiteur e-commerce
-            </div>
-            <div style="font-size: 1.1rem; margin-top: 1rem; opacity: 0.9;">
-                Du repo vide au modèle XGBoost en production — le récit visuel d'un projet end-to-end.
-            </div>
-            <div style="margin-top: 1.6rem; font-size: 0.95rem; opacity: 0.85;">
-                Manech Carriou · github.com/manechcarriou-lab/ml-poc-project
-            </div>
-        </div>""",
-        unsafe_allow_html=True,
+    hero_style = (
+        "background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);"
+        "border-radius: 20px; padding: 3rem 2.8rem; color: white; margin-bottom: 1.8rem;"
+        "position: relative; overflow: hidden;"
+        "box-shadow: 0 20px 60px rgba(99, 102, 241, 0.3), 0 8px 24px rgba(236, 72, 153, 0.2);"
     )
+    hero_html = (
+        f'<div style="{hero_style}">'
+        '<div style="position: absolute; top: -40px; right: -40px; width: 200px; height: 200px;'
+        ' background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(40px);"></div>'
+        '<div style="position: absolute; bottom: -60px; left: -60px; width: 240px; height: 240px;'
+        ' background: rgba(236, 72, 153, 0.2); border-radius: 50%; filter: blur(50px);"></div>'
+        '<div style="position: relative; z-index: 1;">'
+        '<div style="font-size: 0.78rem; font-weight: 700; letter-spacing: 0.28rem; opacity: 0.85;">'
+        '✨ MACHINE LEARNING · PROOF OF CONCEPT · ALBERT SCHOOL'
+        '</div>'
+        '<div style="font-size: 2.8rem; font-weight: 800; margin-top: 1.2rem; line-height: 1.1; letter-spacing: -0.02em;">'
+        "Prédire la conversion d'un visiteur e-commerce"
+        '</div>'
+        '<div style="font-size: 1.15rem; margin-top: 1.1rem; opacity: 0.92; max-width: 720px; line-height: 1.5;">'
+        "Du repo vide au modèle XGBoost en production — un récit visuel, end-to-end, anti-leakage."
+        '</div>'
+        '<div style="margin-top: 1.8rem; font-size: 0.9rem; opacity: 0.85; display: flex; gap: 1.2rem; flex-wrap: wrap;">'
+        '<span>👤 Manech Carriou</span>'
+        '<span>·</span>'
+        '<span>🎓 Albert School</span>'
+        '<span>·</span>'
+        '<span>🔗 github.com/manechcarriou-lab/ml-poc-project</span>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(hero_html, unsafe_allow_html=True)
 
     cols = st.columns(4)
     with cols[0]:
@@ -367,7 +474,7 @@ def section_problem() -> None:
                 y=funnel_data["Étape"],
                 x=funnel_data["Nombre"],
                 textinfo="value+percent initial",
-                marker=dict(color=[PRIMARY, "#3D5A80", "#98C1D9", ACCENT]),
+                marker=dict(color=["#6366F1", "#8B5CF6", "#A855F7", "#EC4899"]),
             )
         )
         fig.update_layout(height=380, margin=dict(t=20, b=20, l=20, r=20),
@@ -427,7 +534,10 @@ def section_dataset(df: pd.DataFrame | None) -> None:
                     y=counts.values,
                     text=[f"{v:,}<br>{p} %" for v, p in zip(counts.values, pct.values)],
                     textposition="outside",
-                    marker_color=[PRIMARY, ACCENT],
+                    marker=dict(
+                        color=[PRIMARY, ACCENT],
+                        line=dict(color="white", width=2),
+                    ),
                 )
             )
             fig.update_layout(
@@ -555,10 +665,14 @@ def section_eda(df: pd.DataFrame | None) -> None:
                 values=counts.values,
                 names=["No purchase", "Purchase"],
                 color_discrete_sequence=[PRIMARY, ACCENT],
-                hole=0.55,
+                hole=0.65,
                 title="Distribution de Revenue",
             )
-            fig.update_traces(textposition="outside", textinfo="percent+label")
+            fig.update_traces(
+                textposition="outside",
+                textinfo="percent+label",
+                marker=dict(line=dict(color="white", width=3)),
+            )
             st.plotly_chart(_plotly_clean(fig), use_container_width=True)
         with col2:
             _insight(
@@ -778,6 +892,7 @@ def section_encoding() -> None:
             },
             category_orders={"encoding": ["OneHot", "Ordinal", "Target"]},
         )
+        fig.update_traces(marker=dict(line=dict(color="white", width=1)))
         fig.update_traces(textposition="outside")
         fig.update_layout(title="Test F1 — encoding × model (à params modèle figés)", height=420,
                           yaxis_title="F1", xaxis_title="")
@@ -970,15 +1085,24 @@ def section_threshold(test_pred: pd.DataFrame | None) -> None:
     best_f1 = df["f1"].max()
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["threshold"], y=df["precision"], name="Precision",
-                              line=dict(color=PRIMARY, width=2)))
-    fig.add_trace(go.Scatter(x=df["threshold"], y=df["recall"], name="Recall",
-                              line=dict(color=ACCENT, width=2)))
-    fig.add_trace(go.Scatter(x=df["threshold"], y=df["f1"], name="F1",
-                              line=dict(color=SUCCESS, width=3)))
-    fig.add_vline(x=0.5, line_dash="dot", line_color="gray", annotation_text="Default 0.5")
-    fig.add_vline(x=best_t, line_dash="dash", line_color="red",
-                  annotation_text=f"Optimum {best_t:.2f}")
+    fig.add_trace(go.Scatter(
+        x=df["threshold"], y=df["precision"], name="Precision",
+        line=dict(color=PRIMARY, width=2.5),
+        fill='tozeroy', fillcolor=f'rgba(99, 102, 241, 0.05)',
+    ))
+    fig.add_trace(go.Scatter(
+        x=df["threshold"], y=df["recall"], name="Recall",
+        line=dict(color=ACCENT, width=2.5),
+    ))
+    fig.add_trace(go.Scatter(
+        x=df["threshold"], y=df["f1"], name="F1",
+        line=dict(color=SUCCESS, width=3.5),
+    ))
+    fig.add_vline(x=0.5, line_dash="dot", line_color=GREY,
+                  annotation_text="Default 0.5", annotation_font=dict(color=GREY))
+    fig.add_vline(x=best_t, line_dash="dash", line_color=ACCENT_DARK,
+                  annotation_text=f"Optimum {best_t:.2f}",
+                  annotation_font=dict(color=ACCENT_DARK))
     fig.update_layout(
         title="XGBoost — precision / recall / F1 vs seuil de décision",
         xaxis_title="Threshold",
@@ -1054,8 +1178,9 @@ def section_results(metrics_df: pd.DataFrame | None) -> None:
                 mode="lines+markers+text",
                 text=[f"{v:.4f}" for v in evo[col]],
                 textposition="top center",
-                line=dict(color=color, width=3),
-                marker=dict(size=10),
+                textfont=dict(size=11, color=color),
+                line=dict(color=color, width=3.5, shape="spline", smoothing=0.4),
+                marker=dict(size=12, line=dict(color="white", width=2)),
             )
         )
     fig.update_layout(
@@ -1109,83 +1234,336 @@ def section_results(metrics_df: pd.DataFrame | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def section_demo(pipeline) -> None:
+# Preset profiles — calibrated to produce sensible probas
+DEMO_PRESETS = {
+    "👜 Acheteur engagé": {
+        "demo_pp": 60, "demo_pd": 2400, "demo_pv": 90.0,
+        "demo_br": 0.004, "demo_er": 0.012, "demo_ap": 4,
+        "demo_inf": 1, "demo_inf_d": 80.0,
+        "demo_vt": "New_Visitor", "demo_m": "Nov", "demo_we": False,
+    },
+    "🤔 Visiteur curieux": {
+        "demo_pp": 25, "demo_pd": 800, "demo_pv": 6.0,
+        "demo_br": 0.02, "demo_er": 0.04, "demo_ap": 2,
+        "demo_inf": 1, "demo_inf_d": 30.0,
+        "demo_vt": "Returning_Visitor", "demo_m": "May", "demo_we": True,
+    },
+    "🏃 Touriste pressé": {
+        "demo_pp": 3, "demo_pd": 40, "demo_pv": 0.0,
+        "demo_br": 0.18, "demo_er": 0.19, "demo_ap": 0,
+        "demo_inf": 0, "demo_inf_d": 0.0,
+        "demo_vt": "Returning_Visitor", "demo_m": "Aug", "demo_we": False,
+    },
+}
+
+
+def _build_session_row(
+    product_related: int, product_duration: float, page_values: float,
+    bounce_rate: float, exit_rate: float, admin_pages: int,
+    informational: int, informational_duration: float,
+    visitor_type: str, month: str, weekend: bool,
+    operating_systems: int = 2, browser: int = 2,
+    region: int = 1, traffic_type: int = 2, special_day: float = 0.0,
+) -> pd.DataFrame:
+    """Build a single-row session DataFrame with engineered features applied via
+    `add_engineered_features` — same exact code path as training."""
+    base = pd.DataFrame([{
+        "Administrative": admin_pages,
+        "Administrative_Duration": admin_pages * 30.0,
+        "Informational": informational,
+        "Informational_Duration": float(informational_duration),
+        "ProductRelated": product_related,
+        "ProductRelated_Duration": float(product_duration),
+        "BounceRates": bounce_rate,
+        "ExitRates": exit_rate,
+        "PageValues": float(page_values),
+        "SpecialDay": special_day,
+        "Month": month,
+        "OperatingSystems": operating_systems,
+        "Browser": browser,
+        "Region": region,
+        "TrafficType": traffic_type,
+        "VisitorType": visitor_type,
+        "Weekend": weekend,
+    }])
+    return add_engineered_features(base)
+
+
+@st.cache_resource
+def _build_shap_explainer(_pipeline):
+    """Cached SHAP TreeExplainer for the XGBoost classifier inside the pipeline."""
+    try:
+        import shap
+        inner = getattr(_pipeline, "estimator_", _pipeline)
+        clf = inner.named_steps["clf"]
+        return shap.TreeExplainer(clf)
+    except Exception:
+        return None
+
+
+def _shap_contributions(pipeline, row: pd.DataFrame, top_k: int = 10) -> pd.DataFrame | None:
+    """Return a DataFrame of top-k SHAP contributions for the given row."""
+    try:
+        explainer = _build_shap_explainer(pipeline)
+        if explainer is None:
+            return None
+        inner = getattr(pipeline, "estimator_", pipeline)
+        pre = inner.named_steps["preprocessor"]
+        x_trans = pre.transform(row)
+        feature_names = list(pre.get_feature_names_out())
+        sv = explainer.shap_values(x_trans)
+        if isinstance(sv, list):
+            sv = sv[1] if len(sv) > 1 else sv[0]
+        sv = np.asarray(sv).ravel()
+        df = pd.DataFrame({"feature": feature_names, "shap": sv, "value": np.asarray(x_trans).ravel()})
+        df["abs"] = df["shap"].abs()
+        return df.sort_values("abs", ascending=False).head(top_k).iloc[::-1]
+    except Exception:
+        return None
+
+
+def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
     _section_header(
         "11 · DÉMO INTERACTIVE",
         "Tester le modèle XGBoost sur une session synthétique",
-        "Règle les sliders → la jauge XGBoost te donne la probabilité d'achat.",
+        "Règle les sliders, charge un preset, ou pioche une vraie session du test set. Le modèle te donne la probabilité d'achat + l'explication SHAP.",
     )
 
     if pipeline is None:
         st.warning("Modèle XGBoost non trouvé. Lance `python scripts/train.py` d'abord.")
         return
 
+    # ------------------------------------------------------------------
+    # Quick start: presets + random sample
+    # ------------------------------------------------------------------
+    st.markdown("##### ⚡ Quick start — pré-remplir les sliders")
+    cols = st.columns([1, 1, 1, 1])
+    for col, (label, preset) in zip(cols[:3], DEMO_PRESETS.items()):
+        if col.button(label, use_container_width=True, key=f"preset_{label}"):
+            for k, v in preset.items():
+                st.session_state[k] = v
+            st.rerun()
+
+    if cols[3].button("🎲 Échantillon réel (test set)", use_container_width=True, key="demo_random"):
+        if test_pred is not None and len(test_pred) > 0:
+            sample = test_pred.sample(1, random_state=np.random.randint(0, 10_000)).iloc[0]
+            st.session_state["demo_pp"] = int(sample.get("ProductRelated", 30))
+            st.session_state["demo_pd"] = float(sample.get("ProductRelated_Duration", 1000))
+            st.session_state["demo_pv"] = float(sample.get("PageValues", 5.0))
+            st.session_state["demo_br"] = float(sample.get("BounceRates", 0.02))
+            st.session_state["demo_er"] = float(sample.get("ExitRates", 0.04))
+            st.session_state["demo_ap"] = int(sample.get("Administrative", 2))
+            st.session_state["demo_inf"] = int(sample.get("Informational", 0))
+            st.session_state["demo_inf_d"] = float(sample.get("Informational_Duration", 0.0))
+            st.session_state["demo_vt"] = str(sample.get("VisitorType", "Returning_Visitor"))
+            st.session_state["demo_m"] = str(sample.get("Month", "Nov"))
+            st.session_state["demo_we"] = bool(sample.get("Weekend", False))
+            st.session_state["_demo_truth"] = int(sample["y_true"])
+            st.rerun()
+
+    add_vertical_space(1)
+
+    # ------------------------------------------------------------------
+    # Sliders (3 columns)
+    # ------------------------------------------------------------------
     col1, col2, col3 = st.columns(3)
     with col1:
-        product_related = st.slider("Pages produit visitées", 0, 200, 30, key="demo_pp")
-        product_duration = st.slider("Durée pages produit (s)", 0, 6000, 1000, step=50, key="demo_pd")
-        page_values = st.slider("PageValues", 0.0, 200.0, 5.0, step=1.0, key="demo_pv")
+        product_related = st.slider("Pages produit visitées", 0, 200,
+                                     int(st.session_state.get("demo_pp", 30)), key="demo_pp")
+        product_duration = st.slider("Durée pages produit (s)", 0, 6000,
+                                      int(st.session_state.get("demo_pd", 1000)), step=50, key="demo_pd")
+        page_values = st.slider("PageValues (proxy d'intention)", 0.0, 200.0,
+                                float(st.session_state.get("demo_pv", 5.0)), step=1.0, key="demo_pv")
+        admin_pages = st.slider("Pages admin (login / cart)", 0, 30,
+                                 int(st.session_state.get("demo_ap", 2)), key="demo_ap")
     with col2:
-        bounce_rate = st.slider("Bounce rate", 0.0, 0.2, 0.02, step=0.005, format="%.3f", key="demo_br")
-        exit_rate = st.slider("Exit rate", 0.0, 0.2, 0.04, step=0.005, format="%.3f", key="demo_er")
-        admin_pages = st.slider("Pages admin (login/cart…)", 0, 30, 2, key="demo_ap")
+        bounce_rate = st.slider("Bounce rate", 0.0, 0.2,
+                                 float(st.session_state.get("demo_br", 0.02)), step=0.005, format="%.3f", key="demo_br")
+        exit_rate = st.slider("Exit rate", 0.0, 0.2,
+                               float(st.session_state.get("demo_er", 0.04)), step=0.005, format="%.3f", key="demo_er")
+        informational = st.slider("Pages informationnelles", 0, 30,
+                                   int(st.session_state.get("demo_inf", 0)), key="demo_inf")
+        informational_duration = st.slider("Durée pages info (s)", 0, 3000,
+                                            int(st.session_state.get("demo_inf_d", 0)), step=30, key="demo_inf_d")
     with col3:
-        visitor_type = st.selectbox("Visitor type", ["Returning_Visitor", "New_Visitor", "Other"], key="demo_vt")
-        month = st.selectbox("Mois", ["Feb", "Mar", "May", "June", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], index=8, key="demo_m")
-        weekend = st.checkbox("Weekend", value=False, key="demo_we")
+        visitor_type = st.selectbox(
+            "Visitor type",
+            ["Returning_Visitor", "New_Visitor", "Other"],
+            index=["Returning_Visitor", "New_Visitor", "Other"].index(
+                st.session_state.get("demo_vt", "Returning_Visitor")
+            ),
+            key="demo_vt",
+        )
+        month_options = ["Feb", "Mar", "May", "June", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        month = st.selectbox(
+            "Mois",
+            month_options,
+            index=month_options.index(st.session_state.get("demo_m", "Nov")),
+            key="demo_m",
+        )
+        weekend = st.checkbox("Weekend", value=bool(st.session_state.get("demo_we", False)), key="demo_we")
+        threshold = st.slider("Seuil de décision (0.305 = optimum XGBoost)",
+                               0.05, 0.95, 0.305, step=0.01, key="demo_th")
 
-    threshold = st.slider("Seuil de décision (0.305 = optimal pour XGBoost)", 0.05, 0.95, 0.305, step=0.01, key="demo_th")
+    # ------------------------------------------------------------------
+    # Predict
+    # ------------------------------------------------------------------
+    try:
+        row = _build_session_row(
+            product_related=product_related, product_duration=product_duration,
+            page_values=page_values, bounce_rate=bounce_rate, exit_rate=exit_rate,
+            admin_pages=admin_pages, informational=informational,
+            informational_duration=informational_duration,
+            visitor_type=visitor_type, month=month, weekend=weekend,
+        )
+        proba = float(pipeline.predict_proba(row)[0, 1])
+    except Exception as e:
+        st.error(f"Erreur de prédiction : {e}")
+        return
 
-    row = pd.DataFrame([{
-        "Administrative": admin_pages,
-        "Administrative_Duration": admin_pages * 30.0,
-        "Informational": 0,
-        "Informational_Duration": 0.0,
-        "ProductRelated": product_related,
-        "ProductRelated_Duration": float(product_duration),
-        "BounceRates": bounce_rate,
-        "ExitRates": exit_rate,
-        "PageValues": float(page_values),
-        "SpecialDay": 0.0,
-        "Month": month,
-        "OperatingSystems": 2, "Browser": 2, "Region": 1, "TrafficType": 2,
-        "VisitorType": visitor_type, "Weekend": weekend,
-        "TotalPages": admin_pages + product_related,
-        "TotalDuration": admin_pages * 30.0 + product_duration,
-        "AvgTimePerPage": (admin_pages * 30.0 + product_duration) / max(admin_pages + product_related, 1),
-        "ProductRelatedRatio": product_related / max(admin_pages + product_related, 1),
-        "HighPageValue": int(page_values > 0),
-        "IsHighBounce": int(bounce_rate > 0.1),
-        "IsSpecialDay": 0,
-    }])
-    proba = float(pipeline.predict_proba(row)[0, 1])
-    decision = "🟢 Cibler — action marketing recommandée" if proba >= threshold else "⚪ Ne pas cibler"
+    decision_emoji = "🟢" if proba >= threshold else "⚪"
+    decision_text = "Cibler — action marketing recommandée" if proba >= threshold else "Ne pas cibler"
+    confidence = abs(proba - 0.5) * 2  # 0 = pile à 0.5, 1 = très confiant
 
+    add_vertical_space(1)
+    st.markdown("---")
+
+    # ------------------------------------------------------------------
+    # Output: gauge + KPIs + truth (if random sample)
+    # ------------------------------------------------------------------
     cols = st.columns([2, 1])
     with cols[0]:
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=proba * 100,
-            number={"suffix": " %", "font": {"size": 48, "color": PRIMARY}},
+            number={"suffix": " %", "font": {"size": 52, "color": PRIMARY, "family": "Inter"}},
             gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": PRIMARY},
-                "threshold": {"line": {"color": "red", "width": 4}, "value": threshold * 100},
+                "axis": {"range": [0, 100], "tickcolor": GREY, "tickfont": {"color": GREY}},
+                "bar": {"color": PRIMARY, "thickness": 0.7},
+                "bordercolor": "#E2E8F0",
+                "borderwidth": 1,
+                "threshold": {"line": {"color": ACCENT_DARK, "width": 4}, "value": threshold * 100},
                 "steps": [
-                    {"range": [0, 30], "color": "#F0F4F8"},
-                    {"range": [30, 60], "color": "#DCE6F0"},
-                    {"range": [60, 100], "color": "#B8CDE0"},
+                    {"range": [0, 30], "color": "#F1F5F9"},
+                    {"range": [30, 60], "color": "#E0E7FF"},
+                    {"range": [60, 100], "color": "#C7D2FE"},
                 ],
             },
-            title={"text": "Probabilité d'achat (XGBoost)", "font": {"size": 16}},
+            title={"text": "<b>Probabilité d'achat (XGBoost)</b>",
+                   "font": {"size": 16, "color": DARK, "family": "Inter"}},
         ))
-        fig.update_layout(height=320, margin=dict(t=40, b=20, l=20, r=20),
+        fig.update_layout(height=340, margin=dict(t=50, b=20, l=20, r=20),
                           paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
     with cols[1]:
         _kpi("Probabilité", f"{proba:.1%}")
         _kpi("Seuil", f"{threshold:.2f}")
-        st.markdown(f"### {decision}")
+        _kpi("Confiance", f"{confidence:.0%}", "écart au 50/50")
+        st.markdown(f"### {decision_emoji} {decision_text}")
+        truth = st.session_state.get("_demo_truth")
+        if truth is not None:
+            actual = "🛒 ACHAT" if truth == 1 else "❌ Pas d'achat"
+            correct = "✅ Bien classé" if (proba >= threshold) == (truth == 1) else "⚠️ Mal classé"
+            st.markdown(
+                f"**Vérité terrain** (échantillon test) : {actual}  \n{correct}"
+            )
+
+    # ------------------------------------------------------------------
+    # Two analysis tabs: probability context + SHAP
+    # ------------------------------------------------------------------
+    add_vertical_space(1)
+    tabs = st.tabs(["📈 Position dans la distribution", "🔬 Explication SHAP", "💼 Décision business"])
+
+    with tabs[0]:
+        if test_pred is not None and "proba_xgboost" in test_pred.columns:
+            scores = test_pred["proba_xgboost"].values
+            percentile = (scores < proba).mean() * 100
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(
+                x=scores, nbinsx=50,
+                marker=dict(color=PRIMARY, opacity=0.6, line=dict(color="white", width=0.5)),
+                name="Test set",
+            ))
+            fig.add_vline(x=proba, line_color=ACCENT_DARK, line_width=3,
+                          annotation_text=f"Cette session ({proba:.1%})",
+                          annotation_position="top right",
+                          annotation_font=dict(color=ACCENT_DARK, size=13))
+            fig.add_vline(x=threshold, line_color=GREY, line_dash="dash",
+                          annotation_text=f"Seuil {threshold:.2f}",
+                          annotation_position="top left",
+                          annotation_font=dict(color=GREY))
+            fig.update_layout(
+                title="Distribution des probas XGBoost sur le test set (2 466 sessions)",
+                xaxis_title="Probabilité d'achat",
+                yaxis_title="Sessions",
+                height=380, showlegend=False,
+            )
+            st.plotly_chart(_plotly_clean(fig), use_container_width=True)
+            _insight(
+                "Lecture",
+                f"Cette session se situe au <b>{percentile:.0f}<sup>e</sup> percentile</b> du test set — "
+                f"{percentile:.0f} % des sessions du test ont une proba inférieure. "
+                f"Plus c'est haut, plus la session est jugée 'à fort potentiel d'achat' par le modèle.",
+            )
+        else:
+            st.info("Charge `results/test_predictions.csv` pour voir la distribution.")
+
+    with tabs[1]:
+        contrib = _shap_contributions(pipeline, row, top_k=10)
+        if contrib is None:
+            st.info("SHAP indisponible (lib non installée ou modèle incompatible). "
+                    "Pour l'activer : `pip install shap`.")
+        else:
+            colors = [SUCCESS if v > 0 else ACCENT for v in contrib["shap"]]
+            fig = go.Figure(go.Bar(
+                x=contrib["shap"], y=contrib["feature"],
+                orientation="h",
+                marker=dict(color=colors, line=dict(color="white", width=1)),
+                text=[f"{v:+.3f}" for v in contrib["shap"]],
+                textposition="outside",
+                hovertemplate="<b>%{y}</b><br>SHAP: %{x:+.4f}<br>Valeur: %{customdata:.3f}<extra></extra>",
+                customdata=contrib["value"],
+            ))
+            fig.update_layout(
+                title="Top 10 features qui poussent la prédiction (SHAP local)",
+                xaxis_title="Contribution au log-odds (vert = ↑ proba, rose = ↓ proba)",
+                height=460,
+            )
+            st.plotly_chart(_plotly_clean(fig), use_container_width=True)
+            _insight(
+                "Comment lire",
+                "Chaque barre montre comment une feature pousse la prédiction <b>au-dessus</b> ou <b>en-dessous</b> "
+                "de la moyenne du modèle. SHAP est leakage-safe et exact pour les modèles d'arbres (TreeExplainer).",
+            )
+
+    with tabs[2]:
+        c1, c2, c3 = st.columns(3)
+        if proba >= threshold:
+            with c1:
+                _kpi("Action recommandée", "🟢 Cibler")
+            with c2:
+                _kpi("Coût attendu", "Faible")
+            with c3:
+                _kpi("Upside", "Conversion potentielle")
+            _insight(
+                "Pourquoi cibler",
+                "La proba est au-dessus du seuil de décision. Sur 100 sessions au-dessus de ce seuil, "
+                "~62 % sont vraiment des acheteurs (precision XGBoost = 0.62). "
+                "On déclenche pop-up / coupon / retargeting.",
+            )
+        else:
+            with c1:
+                _kpi("Action recommandée", "⚪ Ne pas cibler")
+            with c2:
+                _kpi("Économie", "Budget marketing")
+            with c3:
+                _kpi("Risque", "Conversion manquée")
+            _insight(
+                "Pourquoi ne pas cibler",
+                "La proba est en-dessous du seuil. On garde le budget pour les sessions à plus fort potentiel. "
+                "Si la valeur d'une conversion est très élevée par rapport au coût d'une action marketing, "
+                "on peut baisser le seuil pour gagner du recall.",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1259,15 +1637,14 @@ def section_conclusion() -> None:
         )
 
     st.markdown("---")
-    st.markdown(
-        f"""<div style="text-align: center; padding: 1.5rem; color: {GREY};">
-            Manech Carriou · Albert School · 2026<br>
-            <a href="https://github.com/manechcarriou-lab/ml-poc-project" style="color: {ACCENT};">
-                github.com/manechcarriou-lab/ml-poc-project
-            </a>
-        </div>""",
-        unsafe_allow_html=True,
+    footer_html = (
+        f'<div style="text-align: center; padding: 1.5rem; color: {GREY};">'
+        'Manech Carriou · Albert School · 2026<br>'
+        f'<a href="https://github.com/manechcarriou-lab/ml-poc-project" style="color: {ACCENT};">'
+        'github.com/manechcarriou-lab/ml-poc-project</a>'
+        '</div>'
     )
+    st.markdown(footer_html, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1276,19 +1653,19 @@ def section_conclusion() -> None:
 
 
 SECTIONS = [
-    ("🏠  Cover", section_cover),
-    ("🎯  01 · Le problème", "problem"),
-    ("📦  02 · Le dataset", "dataset"),
-    ("🛠️  03 · Setup technique", "setup"),
-    ("🔍  04 · EDA", "eda"),
-    ("⚙️  05 · Feature engineering", "fe"),
-    ("🔠  06 · Encoding comparison", "encoding"),
-    ("🎰  07 · Optuna", "optuna"),
-    ("📊  08 · MLflow", "mlflow"),
-    ("🎚️  09 · Threshold tuning", "threshold"),
-    ("🏆  10 · Résultats", "results"),
-    ("🚀  11 · Démo interactive", "demo"),
-    ("📌  12 · Conclusion", "conclusion"),
+    ("Cover", "house-fill", section_cover),
+    ("Le problème", "bullseye", "problem"),
+    ("Le dataset", "database-fill", "dataset"),
+    ("Setup technique", "tools", "setup"),
+    ("EDA", "search", "eda"),
+    ("Feature engineering", "sliders", "fe"),
+    ("Encoding comparison", "diagram-3-fill", "encoding"),
+    ("Optuna", "bullseye", "optuna"),
+    ("MLflow", "graph-up-arrow", "mlflow"),
+    ("Threshold tuning", "speedometer2", "threshold"),
+    ("Résultats", "trophy-fill", "results"),
+    ("Démo live", "rocket-takeoff-fill", "demo"),
+    ("Conclusion", "flag-fill", "conclusion"),
 ]
 
 
@@ -1300,6 +1677,9 @@ def build_app() -> None:
         initial_sidebar_state="expanded",
     )
     _inject_css()
+    # Reset per-render component-id counters so shadcn keys stay stable.
+    _KPI_COUNTER["i"] = 0
+    _BADGE_COUNTER["i"] = 0
 
     df = _load_dataset()
     metrics_df = _load_metrics()
@@ -1307,27 +1687,76 @@ def build_app() -> None:
     pipeline = _load_xgb()
 
     with st.sidebar:
-        st.markdown("# 🛒 ML PoC")
-        st.markdown("**Présentation interactive**")
-        st.markdown("---")
-        labels = [s[0] for s in SECTIONS]
-        choice = st.radio("Sections", labels, label_visibility="collapsed")
-        st.markdown("---")
-        st.caption("Manech Carriou · Albert School")
-        st.caption(
-            "[Voir le rapport complet](https://github.com/manechcarriou-lab/ml-poc-project/blob/main/deliverables/RAPPORT_COMPLET.md)"
+        sidebar_html = (
+            '<div style="text-align: center; padding: 1.4rem 0 1rem 0;">'
+            '<div style="font-size: 2rem;">🛒</div>'
+            '<div style="font-size: 1.1rem; font-weight: 800; color: white; margin-top: 0.3rem;">ML PoC</div>'
+            '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); letter-spacing: 0.18rem; '
+            'text-transform: uppercase; margin-top: 0.2rem;">Présentation</div>'
+            '</div>'
         )
-        st.caption(
-            "[Voir le repo](https://github.com/manechcarriou-lab/ml-poc-project)"
+        st.markdown(sidebar_html, unsafe_allow_html=True)
+
+        labels = [s[0] for s in SECTIONS]
+        icons = [s[1] for s in SECTIONS]
+
+        choice = option_menu(
+            menu_title=None,
+            options=labels,
+            icons=icons,
+            default_index=0,
+            styles={
+                "container": {
+                    "background-color": "transparent",
+                    "padding": "0",
+                },
+                "icon": {
+                    "color": "rgba(255,255,255,0.7)",
+                    "font-size": "16px",
+                },
+                "nav-link": {
+                    "font-size": "14px",
+                    "font-weight": "500",
+                    "color": "rgba(255,255,255,0.75)",
+                    "padding": "0.6rem 1rem",
+                    "margin": "0.15rem 0.6rem",
+                    "border-radius": "10px",
+                    "--hover-color": "rgba(255,255,255,0.08)",
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(135deg, #6366F1 0%, #EC4899 100%)",
+                    "color": "white",
+                    "font-weight": "600",
+                    "box-shadow": "0 4px 12px rgba(99, 102, 241, 0.35)",
+                },
+            },
+        )
+
+        st.markdown(
+            '<div style="margin: 1.2rem 0.6rem 0; padding-top: 1.2rem; '
+            'border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; '
+            'color: rgba(255,255,255,0.65); line-height: 1.6;">'
+            '<div style="font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 0.3rem;">'
+            'Manech Carriou</div>'
+            '<div>Albert School · ML PoC</div>'
+            '<div style="margin-top: 0.6rem;">'
+            '<a href="https://github.com/manechcarriou-lab/ml-poc-project" '
+            'style="color: #A5B4FC !important; text-decoration: none;">→ Voir le repo GitHub</a>'
+            '</div>'
+            '<div>'
+            '<a href="https://github.com/manechcarriou-lab/ml-poc-project/blob/main/deliverables/RAPPORT_COMPLET.md" '
+            'style="color: #A5B4FC !important; text-decoration: none;">→ Lire le rapport complet</a>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
         )
 
     idx = labels.index(choice)
-    section_key = SECTIONS[idx][1]
+    section_key = SECTIONS[idx][2]
 
     if callable(section_key):
         section_key()
     else:
-        # Dispatch by key
         dispatch = {
             "problem": section_problem,
             "dataset": lambda: section_dataset(df),
@@ -1339,7 +1768,7 @@ def build_app() -> None:
             "mlflow": section_mlflow,
             "threshold": lambda: section_threshold(test_pred),
             "results": lambda: section_results(metrics_df),
-            "demo": lambda: section_demo(pipeline),
+            "demo": lambda: section_demo(pipeline, test_pred),
             "conclusion": section_conclusion,
         }
         dispatch[section_key]()
