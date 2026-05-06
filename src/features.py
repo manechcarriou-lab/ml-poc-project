@@ -1,27 +1,36 @@
 """Feature engineering & preprocessing pipeline for the Online Shoppers dataset.
 
-Goal
-----
-Centralize every transformation applied to features so that train and test get
-*exactly* the same treatment (no leakage). The returned object is a
-``sklearn.pipeline.Pipeline`` so it can be ``fit`` on the train set and
-``transform`` on the test set without re-deriving statistics on the test data.
+The single entry point is ``build_preprocessor(encoder=...)``. Pick the encoder
+that matches your model family (justified empirically in
+``notebooks/encoding_comparison.ipynb``):
 
-Why a single pipeline
----------------------
-- ``StandardScaler`` learns mean/std on train only, applies them to test.
-- ``OneHotEncoder`` learns categories on train only.
-- Any future ``TargetEncoder`` / ``PCA`` / dropping step plugs into the same
-  pipeline, fit once, transformed twice.
+- ``onehot`` (default) — best for linear models and the most robust overall.
+- ``ordinal`` — best for tree-based models. Compact (24 features vs 82) and
+  trees handle non-monotonic splits regardless of the integer ordering.
+- ``target`` — leakage-safe via ``TargetEncoder``'s internal cross-validation.
+
+Every transformation is wrapped in a ``Pipeline`` so it can be ``fit`` on the
+train split and ``transform`` on the test split — no leakage by construction.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
+from sklearn.preprocessing import (
+    FunctionTransformer,
+    OneHotEncoder,
+    OrdinalEncoder,
+    StandardScaler,
+    TargetEncoder,
+)
+
+EncoderName = Literal["onehot", "ordinal", "target"]
+
 
 # ---------------------------------------------------------------------------
 # Column groups (single source of truth for the rest of the project).
@@ -58,21 +67,30 @@ CATEGORICAL_FEATURES: list[str] = [
     "Weekend",
 ]
 
+ENGINEERED_NUMERIC_FEATURES: list[str] = [
+    "TotalPages",
+    "TotalDuration",
+    "AvgTimePerPage",
+    "ProductRelatedRatio",
+]
+
+ENGINEERED_BINARY_FEATURES: list[str] = [
+    "HighPageValue",
+    "IsHighBounce",
+    "IsSpecialDay",
+]
+
 TARGET: str = "Revenue"
 
 
 # ---------------------------------------------------------------------------
 # Hand-crafted feature engineering done before the sklearn pipeline.
-# These are deterministic row-wise transforms — no fit needed, so leakage-safe.
+# Row-wise stateless transforms — fit-free, so leakage-safe.
 # ---------------------------------------------------------------------------
 
 
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add new features derived from existing ones.
-
-    All transforms here are row-wise and stateless, so they can be applied
-    identically to train and test without leakage.
-    """
+    """Add engineered features. Row-wise stateless → leakage-safe."""
     df = df.copy()
 
     total_pages = df["Administrative"] + df["Informational"] + df["ProductRelated"]
@@ -96,70 +114,58 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-ENGINEERED_NUMERIC_FEATURES: list[str] = [
-    "TotalPages",
-    "TotalDuration",
-    "AvgTimePerPage",
-    "ProductRelatedRatio",
-]
-
-ENGINEERED_BINARY_FEATURES: list[str] = [
-    "HighPageValue",
-    "IsHighBounce",
-    "IsSpecialDay",
-]
-
-
 # ---------------------------------------------------------------------------
 # Preprocessing pipeline
 # ---------------------------------------------------------------------------
 
 
 def _log1p_transformer() -> FunctionTransformer:
-    """Stateless log1p — safe for both train and test."""
     return FunctionTransformer(np.log1p, feature_names_out="one-to-one", validate=False)
 
 
-def build_preprocessor() -> ColumnTransformer:
-    """Return a ColumnTransformer that handles all feature types.
+def _categorical_block(encoder: EncoderName):
+    """Return the (transformer, columns) pair for the categorical block."""
+    if encoder == "onehot":
+        return OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    if encoder == "ordinal":
+        return OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+    if encoder == "target":
+        # CV-internal — no leakage. cv=5 is the sklearn default.
+        return TargetEncoder(target_type="binary", random_state=42, cv=5)
+    raise ValueError(f"Unknown encoder: {encoder!r}. Use 'onehot', 'ordinal', or 'target'.")
 
-    - Skewed numeric columns: log1p -> StandardScaler
-    - Other numeric columns: StandardScaler
-    - Categorical columns: OneHotEncoder (handle_unknown='ignore' for robustness)
-    - Engineered binary flags: passed through as-is
+
+def build_preprocessor(encoder: EncoderName = "onehot") -> ColumnTransformer:
+    """Return a ColumnTransformer that handles every feature type.
+
+    Parameters
+    ----------
+    encoder
+        Strategy for ``CATEGORICAL_FEATURES``. See module docstring for guidance.
+
+    Numeric processing is identical across encoders:
+    - Skewed numeric columns: ``log1p`` then ``StandardScaler``
+    - Other numeric columns + engineered aggregates: ``StandardScaler``
+    - Engineered binary flags: passthrough.
     """
     skewed_pipeline = Pipeline(
-        steps=[
-            ("log1p", _log1p_transformer()),
-            ("scale", StandardScaler()),
-        ]
+        steps=[("log1p", _log1p_transformer()), ("scale", StandardScaler())]
     )
 
     plain_numeric = [c for c in NUMERIC_FEATURES if c not in SKEWED_NUMERIC_FEATURES]
 
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
             ("skewed_num", skewed_pipeline, SKEWED_NUMERIC_FEATURES),
             ("num", StandardScaler(), plain_numeric + ENGINEERED_NUMERIC_FEATURES),
-            (
-                "cat",
-                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                CATEGORICAL_FEATURES,
-            ),
+            ("cat", _categorical_block(encoder), CATEGORICAL_FEATURES),
             ("binary_passthrough", "passthrough", ENGINEERED_BINARY_FEATURES),
         ],
         remainder="drop",
         verbose_feature_names_out=False,
     )
 
-    return preprocessor
 
-
-def build_feature_pipeline() -> Pipeline:
-    """Full preprocessing pipeline (engineered features + ColumnTransformer).
-
-    Note: the row-wise feature engineering (``add_engineered_features``) is
-    stateless, so applying it before fitting the pipeline is leakage-safe.
-    The ``Pipeline`` object itself only contains the stateful transformers.
-    """
-    return Pipeline(steps=[("preprocessor", build_preprocessor())])
+def build_feature_pipeline(encoder: EncoderName = "onehot") -> Pipeline:
+    """Convenience wrapper exposing the preprocessor as a Pipeline."""
+    return Pipeline(steps=[("preprocessor", build_preprocessor(encoder))])

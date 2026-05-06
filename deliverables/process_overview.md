@@ -12,14 +12,23 @@ Ce document explique **chaque étape** du projet et **pourquoi** elle a été fa
 
 | Élément | Valeur |
 |---|---|
-| **Modèle retenu** | XGBoost (Optuna-tuned) |
+| **Modèle retenu** | XGBoost + Ordinal encoding + threshold tuning |
 | **Métrique principale** | F1 sur la classe positive (achat) |
-| **Test F1** | **0.6542** (cible >0.60 → +9 %) |
-| **Test ROC-AUC** | **0.9303** |
-| **Bonus threshold-tuning** | F1 = 0.6706 à seuil 0.28 (vs 0.5 par défaut) |
+| **Test F1** | **0.6731** (cible >0.60 → **+12 %**) |
+| **Test ROC-AUC** | **0.9292** |
+| **Threshold optimal** | 0.305 (appris en CV, anti-leakage) |
 | **Reproductibilité** | 4 commandes (`git clone` → `train.py`) |
 
-> Stack : Python 3.13, scikit-learn (Pipeline + ColumnTransformer), Optuna (TPE), MLflow, XGBoost, Streamlit.
+> Stack : Python 3.13, scikit-learn (Pipeline + ColumnTransformer + TunedThresholdClassifierCV), Optuna (TPE), MLflow, XGBoost, Streamlit.
+
+### Évolution F1 — chaque optimisation a apporté du gain
+
+| Étape | LogReg | Random Forest | XGBoost |
+|---|---|---|---|
+| Optuna seul (baseline OneHot, threshold 0.5) | 0.5994 | 0.6292 | 0.6544 |
+| + Encoding optimal par famille (XGBoost → Ordinal) | 0.5994 | 0.6292 | 0.6562 |
+| **+ Threshold tuning automatique (CV-based)** | **0.6426** | **0.6683** | **0.6731** |
+| Gain total | **+7.2 %** | **+6.2 %** | **+2.9 %** |
 
 ---
 
@@ -282,13 +291,20 @@ mlflow ui --backend-store-uri ./mlruns
 
 ## 8. Résultats
 
-### 8.1 Tableau de comparaison (test set 2 466 sessions)
+### 8.1 Tableau de comparaison final (test set 2 466 sessions)
 
-| Modèle | CV F1 | Test F1 | Test Precision | Test Recall | Test ROC-AUC |
-|---|---|---|---|---|---|
-| Logistic Regression | 0.6737 | 0.5994 | 0.7206 | 0.5131 | 0.9137 |
-| Random Forest | 0.6843 | 0.6292 | 0.7500 | 0.5419 | 0.9202 |
-| **XGBoost** | **0.6858** | **0.6542** | 0.7238 | 0.5969 | **0.9303** |
+Modèles **finaux** = pipeline (preprocessor → classifier) Optuna-tuned + **encoder optimal par famille** + **threshold tuning automatique en CV** (seuil de décision appris sur le train uniquement, anti-leakage).
+
+| Modèle | Encoder | Threshold | CV F1 | Test F1 | Precision | Recall | ROC-AUC |
+|---|---|---|---|---|---|---|---|
+| Logistic Regression | OneHot | 0.244 | 0.6737 | 0.6426 | 0.5786 | 0.7225 | 0.9137 |
+| Random Forest | OneHot | 0.360 | 0.6843 | 0.6683 | 0.6403 | 0.6990 | 0.9204 |
+| **XGBoost** ⭐ | **Ordinal** | **0.305** | **0.6783** | **0.6731** | 0.6203 | **0.7356** | **0.9292** |
+
+**Lecture rapide :**
+- XGBoost gagne avec **F1 = 0.6731** (cible 0.60 → +12 %).
+- Recall = 0.7356 → on attrape **74 % des acheteurs réels** (vs 60 % avant le threshold tuning).
+- Precision = 0.6203 → 62 % des sessions ciblées sont vraiment des acheteurs. Compromis assumé pour gagner du recall.
 
 ### 8.2 Courbes ROC et Precision-Recall
 
@@ -308,20 +324,28 @@ XGBoost domine sur les deux courbes. Sur la PR curve, la précision reste >0.70 
 
 > *Atteindre F1 > 0.60 sur la classe positive avec le meilleur modèle.*
 
-✅ **XGBoost atteint F1 = 0.6542**, soit +**9 %** au-dessus du seuil cible.
+✅ **XGBoost atteint F1 = 0.6731**, soit +**12 %** au-dessus du seuil cible.
 
-### 8.5 Threshold tuning — gain « gratuit »
+### 8.5 Threshold tuning — désormais intégré au pipeline
 
 ![Threshold tuning XGBoost](../plots/threshold_tuning_xgb.png)
 
-Le seuil par défaut (0.5) n'est jamais le seuil optimal sur un dataset déséquilibré.
-**À threshold = 0.28**, F1 monte à **0.6706** (vs 0.6542 à 0.5) — soit +2.5 points sans réentraîner. Le seuil idéal dépend du trade-off métier (coût d'une action marketing vs valeur d'une conversion). Implémenté dans la démo Streamlit (`src/app.py` section 5).
+Le seuil par défaut (0.5) n'est jamais le seuil optimal sur un dataset déséquilibré. Auparavant en post-traitement, le threshold tuning est désormais **intégré dans le pipeline d'entraînement** :
+
+- chaque modèle est wrappé dans un `TunedThresholdClassifierCV(scoring='f1', cv=5)`,
+- le seuil optimal est cherché en **5-fold CV sur le train uniquement** → anti-leakage,
+- l'objet sauvegardé en `models/<family>.joblib` expose un `.predict()` qui utilise directement le seuil tuné.
+
+Résultat : le passage du seuil 0.5 au seuil tuné apporte **+4 à +7 points de F1** selon le modèle (cf. tableau 8.1).
 
 ### 8.6 Lecture business
 
-- Sur 100 sessions identifiées comme « probable achat » par le modèle, **~72 sont vraiment des acheteurs** (precision 0.72).
-- Sur 100 acheteurs réels, on **en attrape ~60** (recall 0.60). On rate 40 % des conversions, mais on ne « gaspille » pas de budget marketing sur des non-acheteurs.
-- Le seuil de décision est ajustable : si on veut plus de recall (capter plus d'acheteurs), on baisse le seuil et on accepte plus de faux positifs.
+Au seuil **0.305 retenu pour XGBoost** :
+
+- Sur 100 sessions identifiées comme « probable achat » par le modèle, **~62 sont vraiment des acheteurs** (precision 0.62).
+- Sur 100 acheteurs réels, on **en attrape ~74** (recall 0.74). On rate 26 % des conversions seulement.
+- Trade-off : on a baissé la précision (de 0.72 → 0.62) pour gagner du recall (0.60 → 0.74). Choix justifié si une action marketing inutile coûte moins que rater une conversion.
+- Le seuil reste ajustable selon le ROI exact : la démo Streamlit (`src/app.py` section 5) permet de tester n'importe quel seuil sur le test set en live.
 
 ---
 

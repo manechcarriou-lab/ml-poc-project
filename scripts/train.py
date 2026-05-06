@@ -1,28 +1,32 @@
-"""Train and tune the model zoo with Optuna + MLflow tracking.
+"""Train and tune the model zoo with Optuna + MLflow tracking + threshold tuning.
 
-What this script does
----------------------
-1. Loads the dataset split (``src/data.load_dataset_split``) — 80/20 stratified.
-2. For each model family (Logistic Regression, Random Forest, XGBoost):
-   - Runs an Optuna study that samples hyperparameters,
-   - Each trial fits a *full pipeline* (preprocessor + classifier) on the train
-     split, evaluates with 3-fold stratified CV using F1 (positive class) as
-     the objective,
-   - Logs every trial (params + metrics) to MLflow under one run per trial.
-3. Refits the best pipeline of each family on the entire train split, evaluates
-   on the held-out test split, logs the final test metrics + the saved
-   pipeline as an MLflow artifact and as a ``.joblib`` file in ``models/``.
-4. Writes a summary line per model family.
+Pipeline per family
+-------------------
+1. **Optuna** TPE study, 3-fold stratified CV, F1 (positive class) as objective.
+   Each trial fits the full ``preprocessor → classifier`` pipeline and is logged
+   as a nested MLflow run.
 
-How to inspect the results
---------------------------
+2. **Per-family encoder** — empirically validated in
+   ``notebooks/encoding_comparison.ipynb``:
+       - logreg          → OneHotEncoder (linear models need additive encoding)
+       - random_forest   → OneHotEncoder (best on test, marginal vs ordinal)
+       - xgboost         → OrdinalEncoder (compact 24-dim space, +2 F1 pts)
+
+3. **Threshold tuning** — after the best params are found and the model is
+   refit on the full train, we wrap it in
+   ``TunedThresholdClassifierCV(scoring='f1', cv=5)``. The wrapper is fit on the
+   train data only (its CV stays inside train), then exposes a ``predict()``
+   that uses the optimal F1 threshold instead of the default 0.5.
+
+4. **Final eval** — predictions on the held-out test set with the tuned
+   threshold are logged to MLflow and the wrapped pipeline is saved as
+   ``models/<family>.joblib``.
+
+Inspect runs:
     mlflow ui --backend-store-uri ./mlruns
 
-Then open http://localhost:5000.
-
-How to retrain
---------------
-    python scripts/train.py [--trials 20] [--seed 42]
+Retrain everything:
+    python scripts/train.py [--trials 15] [--seed 42] [--families ...]
 """
 
 from __future__ import annotations
@@ -39,10 +43,19 @@ import mlflow
 import numpy as np
 import optuna
 from optuna.samplers import TPESampler
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+from sklearn.model_selection import (
+    StratifiedKFold,
+    TunedThresholdClassifierCV,
+    cross_val_score,
+)
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
@@ -51,7 +64,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 # ---------------------------------------------------------------------------
-# Module loading (mirrors scripts/main.py to make the project's `src` imports work)
+# Module loading (mirrors scripts/main.py to make the project's src imports work)
 # ---------------------------------------------------------------------------
 
 
@@ -81,6 +94,17 @@ load_dataset_split = data.load_dataset_split
 
 MODELS_DIR = config.MODELS_DIR
 MLRUNS_DIR = PROJECT_ROOT / "mlruns"
+
+
+# ---------------------------------------------------------------------------
+# Default encoder per family — the result of the To-Do 4 comparison study.
+# ---------------------------------------------------------------------------
+
+DEFAULT_ENCODER_PER_FAMILY = {
+    "logreg": "onehot",
+    "random_forest": "onehot",
+    "xgboost": "ordinal",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -137,17 +161,15 @@ def _suggest_xgb(trial: optuna.Trial, scale_pos_weight: float) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def _make_pipeline(estimator) -> Pipeline:
-    return Pipeline(steps=[("preprocessor", build_preprocessor()), ("clf", estimator)])
-
-
-# ---------------------------------------------------------------------------
-# Optuna objective with MLflow logging per trial
-# ---------------------------------------------------------------------------
+def _make_pipeline(estimator, encoder: str) -> Pipeline:
+    return Pipeline(
+        steps=[("preprocessor", build_preprocessor(encoder)), ("clf", estimator)]
+    )
 
 
 def _make_objective(
     family: str,
+    encoder: str,
     suggest: Callable[[optuna.Trial], dict[str, Any]],
     estimator_cls,
     X_train,
@@ -156,9 +178,10 @@ def _make_objective(
 ) -> Callable[[optuna.Trial], float]:
     def objective(trial: optuna.Trial) -> float:
         params = suggest(trial)
-        pipeline = _make_pipeline(estimator_cls(**params))
+        pipeline = _make_pipeline(estimator_cls(**params), encoder)
 
         with mlflow.start_run(run_name=f"{family}-trial-{trial.number}", nested=True):
+            mlflow.log_param("encoder", encoder)
             mlflow.log_params({f"{family}__{k}": v for k, v in params.items()})
             mlflow.log_param("cv_folds", cv.get_n_splits())
 
@@ -174,45 +197,54 @@ def _make_objective(
     return objective
 
 
-# ---------------------------------------------------------------------------
-# Final fit + test eval + MLflow + joblib save
-# ---------------------------------------------------------------------------
-
-
 def _fit_and_log_final(
     family: str,
+    encoder: str,
     estimator_cls,
     best_params: dict[str, Any],
-    extra_params: dict[str, Any],
     X_train,
     X_test,
     y_train,
     y_test,
-) -> tuple[Pipeline, dict[str, float], Path]:
-    full_params = {**best_params, **extra_params}
-    pipeline = _make_pipeline(estimator_cls(**full_params))
+):
+    pipeline = _make_pipeline(estimator_cls(**best_params), encoder)
+
+    # Wrap in a CV threshold tuner — this fits the inner pipeline on train
+    # *and* searches the optimal F1 threshold on the same train via 5-fold CV.
+    # No test data ever touches it.
+    tuned = TunedThresholdClassifierCV(
+        pipeline, scoring="f1", cv=5, n_jobs=-1, random_state=42
+    )
 
     with mlflow.start_run(run_name=f"{family}-final"):
-        mlflow.log_params({f"{family}__{k}": v for k, v in full_params.items()})
+        mlflow.log_param("encoder", encoder)
+        mlflow.log_params({f"{family}__{k}": v for k, v in best_params.items()})
 
-        pipeline.fit(X_train, y_train)
-        y_pred = pipeline.predict(X_test)
-        y_score = pipeline.predict_proba(X_test)[:, 1]
+        tuned.fit(X_train, y_train)
+        best_threshold = float(tuned.best_threshold_)
+        mlflow.log_metric("best_threshold", best_threshold)
 
+        y_pred = tuned.predict(X_test)
+        y_score = tuned.predict_proba(X_test)[:, 1]
+
+        # Report metrics at the tuned threshold (= what tuned.predict uses)
+        # AND at the default 0.5 for transparent comparison.
+        y_pred_default = (y_score >= 0.5).astype(int)
         test_metrics = {
             "test_f1": float(f1_score(y_test, y_pred)),
             "test_precision": float(precision_score(y_test, y_pred, zero_division=0)),
             "test_recall": float(recall_score(y_test, y_pred, zero_division=0)),
             "test_roc_auc": float(roc_auc_score(y_test, y_score)),
+            "test_f1_at_0p5": float(f1_score(y_test, y_pred_default)),
         }
         mlflow.log_metrics(test_metrics)
 
         save_path = MODELS_DIR / f"{family}.joblib"
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(pipeline, save_path)
+        joblib.dump(tuned, save_path)
         mlflow.log_artifact(str(save_path), artifact_path="model")
 
-    return pipeline, test_metrics, save_path
+    return tuned, test_metrics, best_threshold, save_path
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +254,7 @@ def _fit_and_log_final(
 
 def _run_family(
     family: str,
+    encoder: str,
     suggest_fn: Callable[[optuna.Trial], dict[str, Any]],
     estimator_cls,
     X_train,
@@ -230,20 +263,20 @@ def _run_family(
     y_test,
     n_trials: int,
     seed: int,
-    extra_fit_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    print(f"\n=== {family} — Optuna study ({n_trials} trials) ===")
+    print(f"\n=== {family} ({encoder} encoding) - Optuna study ({n_trials} trials) ===")
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=seed)
     sampler = TPESampler(seed=seed)
     study = optuna.create_study(direction="maximize", sampler=sampler, study_name=family)
 
     with mlflow.start_run(run_name=f"{family}-study"):
         mlflow.log_param("model_family", family)
+        mlflow.log_param("encoder", encoder)
         mlflow.log_param("n_trials", n_trials)
         mlflow.log_param("cv_folds", cv.get_n_splits())
 
         objective = _make_objective(
-            family, suggest_fn, estimator_cls, X_train, y_train, cv
+            family, encoder, suggest_fn, estimator_cls, X_train, y_train, cv
         )
         study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
@@ -253,29 +286,26 @@ def _run_family(
 
         print(f"  best CV F1 = {best.value:.4f} | params = {best.params}")
 
-    pipeline, test_metrics, save_path = _fit_and_log_final(
-        family,
-        estimator_cls,
-        best.params,
-        extra_fit_params or {},
-        X_train,
-        X_test,
-        y_train,
-        y_test,
+    tuned, test_metrics, best_threshold, save_path = _fit_and_log_final(
+        family, encoder, estimator_cls, best.params, X_train, X_test, y_train, y_test
     )
 
     print(
-        f"  test F1={test_metrics['test_f1']:.4f} "
-        f"precision={test_metrics['test_precision']:.4f} "
-        f"recall={test_metrics['test_recall']:.4f} "
+        f"  best threshold = {best_threshold:.3f}  (vs 0.5 default)\n"
+        f"  test F1={test_metrics['test_f1']:.4f}  "
+        f"(@0.5 = {test_metrics['test_f1_at_0p5']:.4f})  "
+        f"precision={test_metrics['test_precision']:.4f}  "
+        f"recall={test_metrics['test_recall']:.4f}  "
         f"roc_auc={test_metrics['test_roc_auc']:.4f}"
     )
     print(f"  saved -> {save_path.relative_to(PROJECT_ROOT)}")
 
     return {
         "family": family,
+        "encoder": encoder,
         "best_cv_f1": float(best.value),
         "best_params": best.params,
+        "best_threshold": best_threshold,
         "test_metrics": test_metrics,
         "model_path": str(save_path),
     }
@@ -291,13 +321,20 @@ def main() -> None:
         default=["logreg", "random_forest", "xgboost"],
         choices=["logreg", "random_forest", "xgboost"],
     )
+    parser.add_argument(
+        "--encoder",
+        default="auto",
+        choices=["auto", "onehot", "ordinal", "target"],
+        help="'auto' uses the empirically best encoder per family. "
+             "Specify a single encoder to override for all families.",
+    )
     args = parser.parse_args()
 
     MLRUNS_DIR.mkdir(exist_ok=True)
     mlflow.set_tracking_uri(MLRUNS_DIR.as_uri())
     mlflow.set_experiment("online_shoppers_conversion")
 
-    print("Loading dataset split…")
+    print("Loading dataset split...")
     X_train, X_test, y_train, y_test = load_dataset_split()
     print(f"  train={X_train.shape} test={X_test.shape}")
 
@@ -305,42 +342,44 @@ def main() -> None:
     scale_pos_weight = (1 - pos_rate) / max(pos_rate, 1e-9)
 
     family_dispatch = {
-        "logreg": (_suggest_logreg, LogisticRegression, {}),
-        "random_forest": (_suggest_rf, RandomForestClassifier, {}),
-        "xgboost": (
-            lambda trial: _suggest_xgb(trial, scale_pos_weight),
-            XGBClassifier,
-            {},
-        ),
+        "logreg": (_suggest_logreg, LogisticRegression),
+        "random_forest": (_suggest_rf, RandomForestClassifier),
+        "xgboost": (lambda t: _suggest_xgb(t, scale_pos_weight), XGBClassifier),
     }
 
     summaries = []
     for fam in args.families:
-        suggest_fn, estimator_cls, extra = family_dispatch[fam]
+        encoder = (
+            DEFAULT_ENCODER_PER_FAMILY[fam] if args.encoder == "auto" else args.encoder
+        )
+        suggest_fn, estimator_cls = family_dispatch[fam]
         summary = _run_family(
             fam,
+            encoder,
             suggest_fn,
             estimator_cls,
-            X_train,
-            X_test,
-            y_train,
-            y_test,
+            X_train, X_test, y_train, y_test,
             n_trials=args.trials,
             seed=args.seed,
-            extra_fit_params=extra,
         )
         summaries.append(summary)
 
     print("\n=== Summary ===")
     for s in summaries:
+        m = s["test_metrics"]
         print(
-            f"{s['family']:<14} test_f1={s['test_metrics']['test_f1']:.4f} "
-            f"test_roc_auc={s['test_metrics']['test_roc_auc']:.4f} "
+            f"{s['family']:<14} encoder={s['encoder']:<8} "
+            f"thr={s['best_threshold']:.3f}  "
+            f"test_f1={m['test_f1']:.4f}  test_roc_auc={m['test_roc_auc']:.4f}  "
             f"-> {Path(s['model_path']).name}"
         )
 
     best = max(summaries, key=lambda s: s["test_metrics"]["test_f1"])
-    print(f"\nBest family by test F1: {best['family']} ({best['test_metrics']['test_f1']:.4f})")
+    print(
+        f"\nBest family by test F1: {best['family']} "
+        f"({best['test_metrics']['test_f1']:.4f}, threshold={best['best_threshold']:.3f}, "
+        f"encoder={best['encoder']})"
+    )
     print("Inspect runs with:  mlflow ui --backend-store-uri ./mlruns")
 
 

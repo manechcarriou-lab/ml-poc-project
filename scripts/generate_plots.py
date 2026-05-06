@@ -173,8 +173,13 @@ def plot_pr_curves(models: dict, X_test, y_test) -> None:
     plt.close(fig)
 
 
+def _inner_pipeline(model):
+    """Unwrap TunedThresholdClassifierCV to get the underlying sklearn Pipeline."""
+    return getattr(model, "estimator_", model)
+
+
 def plot_xgb_feature_importance(models: dict) -> None:
-    pipe = models["xgboost"]
+    pipe = _inner_pipeline(models["xgboost"])
     pre = pipe.named_steps["preprocessor"]
     clf = pipe.named_steps["clf"]
     names = list(pre.get_feature_names_out())
