@@ -23,6 +23,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit_shadcn_ui as ui
+from streamlit_extras.add_vertical_space import add_vertical_space
 
 from config import DATA_DIR, MODEL_METRICS_FILE, MODELS, PLOTS_DIR, RESULTS_DIR
 from features import add_engineered_features
@@ -30,11 +32,259 @@ from features import add_engineered_features
 DATASET_PATH = DATA_DIR / "online_shoppers_intention.csv"
 TEST_PRED_PATH = RESULTS_DIR / "test_predictions.csv"
 
-PRIMARY = "#6366F1"
-ACCENT = "#EC4899"
-SUCCESS = "#10B981"
-GREY = "#64748B"
-DARK = "#0F172A"
+PRIMARY = "#6366F1"        # indigo-500
+PRIMARY_DARK = "#4338CA"   # indigo-700
+PRIMARY_LIGHT = "#A5B4FC"  # indigo-300
+ACCENT = "#EC4899"         # pink-500
+ACCENT_DARK = "#BE185D"    # pink-700
+SUCCESS = "#10B981"        # emerald-500
+WARNING = "#F59E0B"        # amber-500
+DANGER = "#EF4444"         # red-500
+GREY = "#64748B"           # slate-500
+LIGHT = "#F1F5F9"          # slate-100
+LIGHTER = "#F8FAFC"        # slate-50
+DARK = "#0F172A"           # slate-900
+WHITE = "#FFFFFF"
+
+
+# ---------------------------------------------------------------------------
+# Custom CSS — same identity as src/presentation.py
+# ---------------------------------------------------------------------------
+
+
+def _inject_css() -> None:
+    css = f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        .stApp {{
+            background:
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.08), transparent 40%),
+                radial-gradient(circle at 100% 0%, rgba(236, 72, 153, 0.06), transparent 40%),
+                {LIGHTER};
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }}
+        .stApp, .stApp * {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }}
+        .section-eyebrow {{
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.22rem;
+            background: linear-gradient(90deg, {PRIMARY} 0%, {ACCENT} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }}
+        .section-title {{
+            font-size: 2rem;
+            font-weight: 800;
+            color: {DARK};
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }}
+        .section-lead {{
+            font-size: 1.05rem;
+            color: {GREY};
+            line-height: 1.6;
+            margin-bottom: 1.6rem;
+            max-width: 820px;
+        }}
+        .insight-card {{
+            background: {WHITE};
+            border: 1px solid #E2E8F0;
+            border-left: 4px solid {ACCENT};
+            padding: 1rem 1.2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.04);
+            margin: 0.6rem 0;
+        }}
+        .insight-card.success {{ border-left-color: {SUCCESS}; }}
+        .insight-card.warning {{ border-left-color: {WARNING}; }}
+        .insight-card.danger {{ border-left-color: {DANGER}; }}
+        .insight-card.info {{ border-left-color: {PRIMARY}; }}
+        .insight-title {{
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: {ACCENT};
+            letter-spacing: 0.16rem;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }}
+        .insight-card.success .insight-title {{ color: {SUCCESS}; }}
+        .insight-card.warning .insight-title {{ color: {WARNING}; }}
+        .insight-card.danger .insight-title {{ color: {DANGER}; }}
+        .insight-card.info .insight-title {{ color: {PRIMARY}; }}
+        .insight-body {{
+            font-size: 0.95rem;
+            color: {DARK};
+            line-height: 1.55;
+        }}
+        .insight-body strong {{ color: {PRIMARY_DARK}; }}
+        .conclusion-card {{
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(99, 102, 241, 0.06) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 14px;
+            padding: 1.4rem 1.6rem;
+            margin: 1.4rem 0;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+        }}
+        .conclusion-card .label {{
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: {SUCCESS};
+            letter-spacing: 0.18rem;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }}
+        .conclusion-card .body {{
+            font-size: 1.05rem;
+            color: {DARK};
+            line-height: 1.55;
+        }}
+        .hero-card {{
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);
+            border-radius: 18px;
+            padding: 2rem 2.2rem;
+            color: white;
+            margin-bottom: 1.6rem;
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.25);
+        }}
+        .hero-card .kicker {{
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.28rem;
+            opacity: 0.85;
+            text-transform: uppercase;
+        }}
+        .hero-card .title {{
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            margin-top: 0.6rem;
+        }}
+        .hero-card .subtitle {{
+            font-size: 1rem;
+            opacity: 0.92;
+            margin-top: 0.7rem;
+            max-width: 760px;
+        }}
+        h1, h2, h3, h4 {{
+            color: {DARK};
+            letter-spacing: -0.015em;
+        }}
+        h2 {{
+            font-weight: 800 !important;
+        }}
+        code {{
+            background: rgba(99, 102, 241, 0.08) !important;
+            color: {PRIMARY_DARK} !important;
+            padding: 0.15rem 0.4rem !important;
+            border-radius: 4px !important;
+            font-size: 0.88em !important;
+        }}
+        pre code {{
+            background: {DARK} !important;
+            color: #E0E7FF !important;
+        }}
+        hr {{
+            border-color: rgba(99, 102, 241, 0.15) !important;
+            margin: 1.5rem 0 !important;
+        }}
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 0.5rem;
+            border-bottom-color: rgba(99, 102, 241, 0.15);
+        }}
+        .stTabs [data-baseweb="tab-list"] button {{
+            font-weight: 600;
+            color: {GREY};
+            padding: 0.6rem 1rem;
+        }}
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {{
+            color: {PRIMARY} !important;
+            border-bottom-color: {PRIMARY} !important;
+        }}
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {DARK} 0%, #1E1B4B 100%);
+        }}
+        section[data-testid="stSidebar"] * {{
+            color: {WHITE} !important;
+        }}
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] a {{
+            color: {PRIMARY_LIGHT} !important;
+        }}
+        footer, header {{visibility: hidden;}}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Reusable styled components
+# ---------------------------------------------------------------------------
+
+
+_KPI_COUNTER = {"i": 0}
+_BADGE_COUNTER = {"i": 0}
+
+
+def _section_header(eyebrow: str, title: str, lead: str = "") -> None:
+    lead_html = f'<div class="section-lead">{lead}</div>' if lead else ""
+    html = (
+        f'<div class="section-eyebrow">{eyebrow}</div>'
+        f'<div class="section-title">{title}</div>'
+        f'{lead_html}'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+    add_vertical_space(1)
+
+
+def _kpi(label: str, value: str, delta: str = "") -> None:
+    """Polished metric card — shadcn UI."""
+    _KPI_COUNTER["i"] += 1
+    ui.metric_card(
+        title=label,
+        content=value,
+        description=delta,
+        key=f"kpi_{_KPI_COUNTER['i']}",
+    )
+
+
+def _insight(title: str, body_html: str, kind: str = "default") -> None:
+    """Card with accent border. kind: default | info | success | warning | danger."""
+    cls = "insight-card" + ("" if kind == "default" else f" {kind}")
+    html = (
+        f'<div class="{cls}">'
+        f'<div class="insight-title">{title}</div>'
+        f'<div class="insight-body">{body_html}</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def _conclusion(label: str, body_html: str) -> None:
+    """Highlighted conclusion block with subtle gradient."""
+    html = (
+        f'<div class="conclusion-card">'
+        f'<div class="label">{label}</div>'
+        f'<div class="body">{body_html}</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def _hero(kicker: str, title: str, subtitle: str = "") -> None:
+    sub = f'<div class="subtitle">{subtitle}</div>' if subtitle else ""
+    html = (
+        f'<div class="hero-card">'
+        f'<div class="kicker">{kicker}</div>'
+        f'<div class="title">{title}</div>'
+        f'{sub}'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +345,11 @@ def _style(fig: go.Figure) -> go.Figure:
 
 
 def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
-    st.header("Partie 1 — Le problème & l'analyse exploratoire")
+    _section_header(
+        "PARTIE 01 · LE PROBLÈME & EDA",
+        "Comprendre la donnée avant de modéliser",
+        "Contexte business, dataset, et les graphiques EDA qui orientent les décisions techniques.",
+    )
 
     st.markdown(
         """
@@ -120,10 +374,14 @@ def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
     )
 
     cols = st.columns(4)
-    cols[0].metric("Sessions analysées", "12 330")
-    cols[1].metric("Features", "17")
-    cols[2].metric("Class imbalance", "85 / 15", help="84.5 % False / 15.5 % True")
-    cols[3].metric("Source", "UCI ML Repo")
+    with cols[0]:
+        _kpi("Sessions analysées", "12 330")
+    with cols[1]:
+        _kpi("Features", "17")
+    with cols[2]:
+        _kpi("Class imbalance", "85 / 15", "84.5 % False · 15.5 % True")
+    with cols[3]:
+        _kpi("Source", "UCI ML Repo", "Licence CC BY 4.0")
 
     st.markdown("---")
     st.markdown("### Le dataset — *Online Shoppers Purchasing Intention*")
@@ -167,12 +425,12 @@ def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
             )
             st.plotly_chart(_style(fig), use_container_width=True)
         with col2:
-            st.info(
-                "**Pourquoi c'est important**\n\n"
-                "Avec 85 % de la majorité, un modèle qui prédit toujours `False` aurait "
-                "**85 % d'accuracy mais 0 de recall** sur la classe d'intérêt.\n\n"
-                "→ On choisit le **F1 sur la classe positive** comme métrique principale, "
-                "pas l'accuracy."
+            _insight(
+                "Pourquoi c'est important",
+                "Avec 85 % de la majorité, un modèle qui prédit toujours <code>False</code> aurait "
+                "<strong>85 % d'accuracy mais 0 de recall</strong> sur la classe d'intérêt. "
+                "On choisit donc le <strong>F1 sur la classe positive</strong> comme métrique principale, pas l'accuracy.",
+                kind="info",
             )
 
     with eda_tab2:
@@ -209,10 +467,11 @@ def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
         fig.update_layout(title=f"Taux de conversion par {seg_col}", height=420,
                           coloraxis_showscale=False)
         st.plotly_chart(_style(fig), use_container_width=True)
-        st.info(
-            "**Insights clés** : Nov/Sep/Oct sont les mois forts (Black Friday). "
-            "**New_Visitor convertit 2× plus** que Returning_Visitor — contre-intuitif "
-            "mais signal très discriminant pour le modèle."
+        _insight(
+            "Insights clés",
+            "Nov/Sep/Oct sont les mois forts (saison Black Friday). "
+            "<strong>New_Visitor convertit 2× plus</strong> que Returning_Visitor — "
+            "contre-intuitif mais signal très discriminant pour le modèle.",
         )
 
     with eda_tab3:
@@ -228,9 +487,10 @@ def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
         fig.update_layout(title="Top 10 corrélations linéaires avec Revenue",
                           height=440, coloraxis_showscale=False)
         st.plotly_chart(_style(fig), use_container_width=True)
-        st.info(
-            "**Lecture** : `PageValues` domine très largement (corr ≈ 0.49). C'est la feature "
-            "qui agrège la valeur des pages vues — directement liée à l'intention d'achat."
+        _insight(
+            "Lecture",
+            "<code>PageValues</code> domine très largement (corr ≈ 0.49). "
+            "C'est la feature qui agrège la valeur des pages vues — directement liée à l'intention d'achat.",
         )
 
 
@@ -271,15 +531,29 @@ def _validation_calibration(test_pred: pd.DataFrame) -> None:
     )
     st.plotly_chart(_style(fig), use_container_width=True)
 
-    st.info(
-        f"**Comment lire :** chaque point représente un bin de probabilité prédite. "
-        f"Si la courbe colle à la diagonale, le modèle est bien calibré — quand il dit "
-        f"« 70 % de chances d'acheter », ça arrive vraiment 70 % du temps.\n\n"
-        f"**Brier score = {brier:.4f}** (plus bas = mieux ; le pire possible est 0.25 sur "
-        f"du binaire à classes équilibrées).\n\n"
-        f"**Verdict :** XGBoost a tendance à être **{'légèrement sous-confiant dans les hauts scores' if (prob_true - prob_pred).max() > 0.05 else 'globalement bien calibré'}** — "
-        f"c'est important parce que ça valide que le seuil 0.305 du threshold tuning correspond à une "
-        f"vraie probabilité de 30.5 %, pas à un nombre arbitraire."
+    verdict_text = (
+        "légèrement sous-confiant dans les hauts scores"
+        if (prob_true - prob_pred).max() > 0.05
+        else "globalement bien calibré"
+    )
+    _insight(
+        "Comment lire",
+        "Chaque point représente un bin de probabilité prédite. "
+        "Si la courbe colle à la diagonale, le modèle est bien calibré — quand il dit "
+        "« 70 % de chances d'acheter », ça arrive vraiment 70 % du temps.",
+        kind="info",
+    )
+    cols = st.columns(2)
+    with cols[0]:
+        _kpi("Brier score", f"{brier:.4f}", "plus bas = mieux (max 0.25)")
+    with cols[1]:
+        _kpi("Calibration", verdict_text.split()[0].capitalize(), verdict_text)
+    _insight(
+        "Verdict",
+        f"XGBoost est <strong>{verdict_text}</strong>. "
+        f"C'est important parce que ça valide que le seuil 0.305 du threshold tuning correspond à une "
+        f"vraie probabilité de 30.5 %, pas à un nombre arbitraire.",
+        kind="success",
     )
 
 
@@ -358,19 +632,28 @@ def _validation_error_analysis(test_pred: pd.DataFrame) -> None:
 
     col_w, col_b = st.columns(2)
     with col_w:
-        st.error("**🔴 Modalités où le modèle fait moins bien**")
-        for _, r in worst.iterrows():
-            st.markdown(
-                f"- **{r['modalité']}** (n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) "
-                f"→ F1 = {r['F1']:.3f}  *({r['gap_to_overall']:+.3f} vs global)*"
-            )
+        bullets = "".join(
+            f"<li><strong>{r['modalité']}</strong> "
+            f"(n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) → "
+            f"F1 = {r['F1']:.3f} <em>({r['gap_to_overall']:+.3f} vs global)</em></li>"
+            for _, r in worst.iterrows()
+        )
+        _insight(
+            "🔴 Modalités où le modèle fait moins bien",
+            f"<ul style='margin: 0; padding-left: 1.2rem;'>{bullets}</ul>",
+            kind="danger",
+        )
     with col_b:
-        st.success("**🟢 Modalités où le modèle excelle**")
-        for _, r in best.iterrows():
-            st.markdown(
-                f"- **{r['modalité']}** (n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) "
-                f"→ F1 = {r['F1']:.3f}"
-            )
+        bullets = "".join(
+            f"<li><strong>{r['modalité']}</strong> "
+            f"(n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) → F1 = {r['F1']:.3f}</li>"
+            for _, r in best.iterrows()
+        )
+        _insight(
+            "🟢 Modalités où le modèle excelle",
+            f"<ul style='margin: 0; padding-left: 1.2rem;'>{bullets}</ul>",
+            kind="success",
+        )
 
     with st.expander("Tableau détaillé par modalité"):
         pretty = seg_df.copy()
@@ -443,23 +726,30 @@ def _validation_naive_baseline(test_pred: pd.DataFrame) -> None:
     gain_vs_simple = (xgb_f1 - naive_f1) / max(naive_f1, 1e-9) * 100
     gain_vs_business = (xgb_f1 - business_f1) / max(business_f1, 1e-9) * 100
 
-    st.info(
-        f"**Lecture honnête du gain ML :**\n\n"
-        f"- Vs *toujours « non-acheteur »* : F1 passe de **0.0000 à {xgb_f1:.4f}**. "
-        f"L'accuracy est trompeuse (le baseline a déjà 84.5 %), mais le F1 montre que ce baseline est inutilisable.\n"
-        f"- Vs *règle simple PageValues > 0* : ML apporte **+{gain_vs_simple:.0f} %** de F1 "
-        f"({naive_f1:.4f} → {xgb_f1:.4f}). Cette règle est étonnamment forte parce que "
-        f"`PageValues` est la feature la plus corrélée à l'achat.\n"
-        f"- Vs *règle métier (PageValues + saison Nov/Sep/Oct)* : ML apporte **+{gain_vs_business:.0f} %** "
-        f"({business_f1:.4f} → {xgb_f1:.4f}).\n\n"
+    _insight(
+        "Lecture honnête du gain ML",
+        f"<ul style='margin: 0 0 0.6rem 1.2rem; padding: 0;'>"
+        f"<li>Vs <em>toujours « non-acheteur »</em> : F1 passe de <strong>0.0000 à {xgb_f1:.4f}</strong>. "
+        f"L'accuracy est trompeuse (le baseline a déjà 84.5 %), mais le F1 montre qu'il est inutilisable.</li>"
+        f"<li>Vs <em>règle simple <code>PageValues &gt; 0</code></em> : ML apporte "
+        f"<strong>+{gain_vs_simple:.0f} %</strong> de F1 ({naive_f1:.4f} → {xgb_f1:.4f}). "
+        f"Cette règle est étonnamment forte parce que <code>PageValues</code> est la feature la plus corrélée.</li>"
+        f"<li>Vs <em>règle métier (PageValues + saison Nov/Sep/Oct)</em> : ML apporte "
+        f"<strong>+{gain_vs_business:.0f} %</strong> ({business_f1:.4f} → {xgb_f1:.4f}).</li>"
+        f"</ul>"
         f"Conclusion : le ML apporte un vrai gain mesurable même contre des heuristiques métier non triviales — "
-        f"justifie le coût d'entraînement et de maintenance d'un modèle plutôt qu'une simple règle."
+        f"ce qui justifie le coût d'entraînement et de maintenance d'un modèle plutôt qu'une simple règle.",
+        kind="info",
     )
 
 
 def part2_models_and_metrics(metrics_df: pd.DataFrame | None,
                               test_pred: pd.DataFrame | None = None) -> None:
-    st.header("Partie 2 — Choix de modèles & métriques")
+    _section_header(
+        "PARTIE 02 · MODÈLES & MÉTRIQUES",
+        "Choisir, comparer, valider rigoureusement",
+        "Pourquoi le F1, pourquoi 3 familles complémentaires, et comment on valide qu'on n'a pas triché.",
+    )
 
     st.markdown(
         """
@@ -557,12 +847,17 @@ def part2_models_and_metrics(metrics_df: pd.DataFrame | None,
                 st.image(str(path), use_container_width=True)
                 st.caption(caption)
             else:
-                st.info(f"`{path.name}` non trouvé. Lance `scripts/generate_plots.py`.")
+                _insight(
+                    "Plot manquant",
+                    f"<code>{path.name}</code> non trouvé. Lance <code>python scripts/generate_plots.py</code>.",
+                    kind="warning",
+                )
 
-    st.success(
-        "**Conclusion :** XGBoost gagne avec **F1 = 0.6731** et **ROC-AUC = 0.9292**. "
-        "Recall = 0.7356 → on attrape **74 % des acheteurs réels**. "
-        "Cible (F1 > 0.60) dépassée de +12 %."
+    _conclusion(
+        "VERDICT",
+        "<strong>XGBoost gagne avec F1 = 0.6731</strong> et ROC-AUC = 0.9292. "
+        "Recall = 0.7356 → on attrape <strong>74 % des acheteurs réels</strong>. "
+        "Cible initiale (F1 > 0.60) dépassée de <strong>+12 %</strong>.",
     )
 
     # ------------------------------------------------------------------
@@ -597,7 +892,11 @@ def part2_models_and_metrics(metrics_df: pd.DataFrame | None,
 
 
 def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
-    st.header("Partie 3 — Démo : utiliser le modèle dans le monde réel")
+    _section_header(
+        "PARTIE 03 · DÉMO MONDE RÉEL",
+        "Utiliser le modèle comme en production",
+        "Simulateur de session + simulation de ROI sur le test set complet.",
+    )
 
     st.markdown(
         """
@@ -612,16 +911,18 @@ def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
         - **Score moyen** → action légère (newsletter, retargeting standard).
         - **Score faible** → ne rien faire, économiser le budget.
 
-        Le slider ci-dessous **simule l'arrivée d'une session** sur le site. Règle les
+        Le simulateur ci-dessous **simule l'arrivée d'une session** sur le site. Règle les
         paramètres comme si tu observais un visiteur en temps réel, et lis la décision
         produite par le modèle.
         """
     )
 
     if pipeline is None:
-        st.warning(
-            "Modèle XGBoost introuvable. Lance `python scripts/train.py` pour créer "
-            "`models/xgboost.joblib`."
+        _insight(
+            "Modèle introuvable",
+            "Le fichier <code>models/xgboost.joblib</code> n'existe pas. "
+            "Lance <code>python scripts/train.py</code> pour générer les modèles.",
+            kind="warning",
         )
         return
 
@@ -678,10 +979,11 @@ def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
     try:
         proba = float(pipeline.predict_proba(row)[0, 1])
     except Exception as e:
-        st.error(f"Erreur de prédiction : {e}")
+        _insight("Erreur de prédiction", str(e), kind="danger")
         return
 
-    decision = "🟢 CIBLER — déclencher action marketing" if proba >= threshold else "⚪ NE PAS CIBLER — économiser le budget"
+    decision_emoji = "🟢" if proba >= threshold else "⚪"
+    decision_text = "Cibler — action marketing recommandée" if proba >= threshold else "Ne pas cibler"
 
     st.markdown("---")
     st.markdown("### Décision en temps réel")
@@ -691,14 +993,14 @@ def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=proba * 100,
-            number={"suffix": " %", "font": {"size": 48, "color": PRIMARY}},
+            number={"suffix": " %", "font": {"size": 52, "color": PRIMARY, "family": "Inter"}},
             gauge={
-                "axis": {"range": [0, 100], "tickcolor": GREY},
+                "axis": {"range": [0, 100], "tickcolor": GREY, "tickfont": {"color": GREY}},
                 "bar": {"color": PRIMARY, "thickness": 0.7},
                 "bordercolor": "#E2E8F0",
                 "borderwidth": 1,
                 "threshold": {
-                    "line": {"color": ACCENT, "width": 4},
+                    "line": {"color": ACCENT_DARK, "width": 4},
                     "value": threshold * 100,
                 },
                 "steps": [
@@ -707,16 +1009,17 @@ def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
                     {"range": [60, 100], "color": "#C7D2FE"},
                 ],
             },
-            title={"text": "<b>Probabilité d'achat estimée par XGBoost</b>"},
+            title={"text": "<b>Probabilité d'achat (XGBoost)</b>",
+                   "font": {"size": 16, "color": DARK, "family": "Inter"}},
         ))
-        fig.update_layout(height=320, margin=dict(t=50, b=20, l=20, r=20),
+        fig.update_layout(height=340, margin=dict(t=50, b=20, l=20, r=20),
                           paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
     with cols[1]:
-        st.metric("Probabilité", f"{proba:.1%}")
-        st.metric("Seuil business", f"{threshold:.3f}")
-        st.metric("Confiance", f"{abs(proba - 0.5) * 2:.0%}", help="Ecart au 50/50")
-        st.markdown(f"### {decision}")
+        _kpi("Probabilité", f"{proba:.1%}")
+        _kpi("Seuil business", f"{threshold:.3f}")
+        _kpi("Confiance", f"{abs(proba - 0.5) * 2:.0%}", "écart au 50/50")
+        st.markdown(f"### {decision_emoji} {decision_text}")
 
     st.markdown("---")
     st.markdown("### Simuler le ROI sur le test set")
@@ -739,39 +1042,53 @@ def part3_real_world_demo(pipeline, test_pred: pd.DataFrame | None) -> None:
         total_targeted = tp + fp
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Sessions ciblées", f"{total_targeted}/{len(y_true)}",
-                  f"{total_targeted/len(y_true):.0%} du trafic")
-        c2.metric("Acheteurs captés (TP)", f"{tp}/{total_real_buyers}",
-                  f"recall {tp/total_real_buyers:.0%}")
-        c3.metric("Fausses alertes (FP)", f"{fp}",
-                  f"precision {tp/max(tp+fp,1):.0%}")
-        c4.metric("Acheteurs ratés (FN)", f"{fn}",
-                  f"{fn/total_real_buyers:.0%} ratés")
+        with c1:
+            _kpi("Sessions ciblées", f"{total_targeted}/{len(y_true)}",
+                 f"{total_targeted/len(y_true):.0%} du trafic")
+        with c2:
+            _kpi("Acheteurs captés (TP)", f"{tp}/{total_real_buyers}",
+                 f"recall {tp/total_real_buyers:.0%}")
+        with c3:
+            _kpi("Fausses alertes (FP)", f"{fp}",
+                 f"precision {tp/max(tp+fp,1):.0%}")
+        with c4:
+            _kpi("Acheteurs ratés (FN)", f"{fn}",
+                 f"{fn/total_real_buyers:.0%} ratés")
 
         fig = go.Figure(go.Bar(
             x=["Acheteurs captés", "Fausses alertes", "Acheteurs ratés", "Bien ignorés"],
             y=[tp, fp, fn, tn],
-            marker_color=[SUCCESS, ACCENT, "#F59E0B", "#94A3B8"],
+            marker=dict(
+                color=[SUCCESS, ACCENT, WARNING, "#94A3B8"],
+                line=dict(color="white", width=2),
+            ),
             text=[tp, fp, fn, tn], textposition="outside",
         ))
         fig.update_layout(
             title=f"Décomposition de la décision au seuil {threshold:.2f}",
-            height=320, showlegend=False, yaxis_title="Sessions",
+            height=340, showlegend=False, yaxis_title="Sessions",
         )
         st.plotly_chart(_style(fig), use_container_width=True)
 
-        st.info(
-            "**Lecture business :**  \n"
-            f"- Si on cible toutes ces sessions, on touche **{total_targeted} visiteurs** "
-            f"(soit {total_targeted/len(y_true):.0%} du trafic).  \n"
-            f"- Parmi eux, **{tp}** sont vraiment des acheteurs (gain).  \n"
-            f"- **{fp}** ne le sont pas (coût de l'action perdue).  \n"
-            f"- On rate **{fn}** acheteurs qu'on aurait pu cibler.  \n\n"
-            "**Comment ajuster :** baisse le seuil si une conversion vaut beaucoup "
-            "plus qu'une action marketing perdue (recall ↑, precision ↓)."
+        _insight(
+            "Lecture business",
+            f"<ul style='margin: 0 0 0.6rem 1.2rem; padding: 0;'>"
+            f"<li>Si on cible toutes ces sessions, on touche <strong>{total_targeted} visiteurs</strong> "
+            f"({total_targeted/len(y_true):.0%} du trafic).</li>"
+            f"<li>Parmi eux, <strong>{tp}</strong> sont vraiment des acheteurs (gain).</li>"
+            f"<li><strong>{fp}</strong> ne le sont pas (coût de l'action perdue).</li>"
+            f"<li>On rate <strong>{fn}</strong> acheteurs qu'on aurait pu cibler.</li>"
+            f"</ul>"
+            f"<strong>Comment ajuster :</strong> baisse le seuil si une conversion vaut beaucoup "
+            f"plus qu'une action marketing perdue (recall ↑, precision ↓).",
+            kind="info",
         )
     else:
-        st.info("`results/test_predictions.csv` introuvable — la simulation ROI nécessite ce fichier.")
+        _insight(
+            "Données manquantes",
+            "<code>results/test_predictions.csv</code> introuvable — la simulation ROI nécessite ce fichier.",
+            kind="warning",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -785,31 +1102,49 @@ def build_app() -> None:
         layout="wide",
         page_icon="🛒",
     )
+    _inject_css()
+    _KPI_COUNTER["i"] = 0
+    _BADGE_COUNTER["i"] = 0
 
     with st.sidebar:
-        st.title("🛒 ML PoC")
-        st.markdown(
-            """
-            **Auteur :** Manech Carriou
-            **École :** Albert School
-            **Repo :** [github.com/manechcarriou-lab/ml-poc-project](https://github.com/manechcarriou-lab/ml-poc-project)
-            """
+        sidebar_html = (
+            '<div style="text-align: center; padding: 1.4rem 0 1rem 0;">'
+            '<div style="font-size: 2rem;">🛒</div>'
+            '<div style="font-size: 1.1rem; font-weight: 800; color: white; margin-top: 0.3rem;">ML PoC</div>'
+            '<div style="font-size: 0.72rem; color: rgba(255,255,255,0.6); letter-spacing: 0.18rem; '
+            'text-transform: uppercase; margin-top: 0.2rem;">Dashboard 3 parties</div>'
+            '</div>'
         )
-        st.divider()
+        st.markdown(sidebar_html, unsafe_allow_html=True)
         st.markdown(
-            """
-            **Pipeline :**
-            EDA → preprocessing (no leakage) → 3 modèles → Optuna + MLflow → threshold tuning → XGBoost.
-
-            **Pour relancer le training :**
-            ```
-            python scripts/train.py
-            ```
-            """
+            '<div style="margin: 0.4rem 0.6rem; padding: 1rem; '
+            'background: rgba(255,255,255,0.04); border-radius: 10px; '
+            'font-size: 0.82rem; color: rgba(255,255,255,0.85); line-height: 1.6;">'
+            '<div style="font-weight: 600; color: white; margin-bottom: 0.3rem;">Manech Carriou</div>'
+            'Albert School · ML PoC<br>'
+            '<a href="https://github.com/manechcarriou-lab/ml-poc-project" '
+            'style="color: #A5B4FC !important; text-decoration: none;">→ Voir le repo</a><br>'
+            '<a href="https://github.com/manechcarriou-lab/ml-poc-project/blob/main/deliverables/RAPPORT_COMPLET.md" '
+            'style="color: #A5B4FC !important; text-decoration: none;">→ Lire le rapport</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div style="margin: 0.8rem 0.6rem 0; padding: 0.8rem; '
+            'background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3); '
+            'border-radius: 10px; font-size: 0.78rem; color: rgba(255,255,255,0.85); line-height: 1.5;">'
+            '<div style="font-weight: 700; color: white; letter-spacing: 0.08rem; '
+            'text-transform: uppercase; font-size: 0.68rem; margin-bottom: 0.4rem;">Pipeline</div>'
+            'EDA → preprocessing<br>(anti-leakage) → 3 modèles<br>→ Optuna + MLflow<br>→ threshold tuning'
+            '</div>',
+            unsafe_allow_html=True,
         )
 
-    st.title("Prédire la conversion d'un visiteur e-commerce")
-    st.caption("Online Shoppers Purchasing Intention — UCI Machine Learning Repository")
+    _hero(
+        "ML POC · ALBERT SCHOOL",
+        "Prédire la conversion d'un visiteur e-commerce",
+        "Online Shoppers Purchasing Intention — UCI Machine Learning Repository · 12 330 sessions, classification binaire déséquilibrée.",
+    )
 
     df = _load_dataset()
     metrics_df = _load_metrics()
