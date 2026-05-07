@@ -10,15 +10,17 @@
 
 ---
 
-## 🎬 Trois manières de découvrir ce projet
+## 🎬 Quatre manières de découvrir ce projet
 
 | Format | Pour qui | Comment |
 |---|---|---|
-| **📊 Dashboard interactif** (recommandé) | Présentation orale, démo live | `streamlit run src/presentation.py` |
-| **🎤 Slides PowerPoint** | Soutenance traditionnelle | `deliverables/process_overview.pptx` (16 slides) |
+| **📖 ML Lifecycle Story** (signature) | Soutenance immersive — raconter le projet comme une histoire | `streamlit run src/lifecycle_story.py` |
+| **📊 Dashboard de présentation** | Démo orale interactive, navigation par sections | `streamlit run src/presentation.py` |
+| **🛒 Dashboard 3-parties** (To-Do 5) | Démo simple problème → modèles → demo | `streamlit run src/app.py` |
+| **🎤 Slides PowerPoint / PDF** | Soutenance traditionnelle, partage hors ligne | `deliverables/process_overview.pptx` (16 slides) |
 | **📄 Rapport texte** (ce document) | Lecture asynchrone, référence détaillée | `deliverables/RAPPORT_COMPLET.md` |
 
-> Le **dashboard Streamlit** reprend le même contenu que ce rapport, en version interactive avec plots Plotly, démo live, et navigation par sections — c'est le format conseillé pour présenter à l'oral.
+> Pour une **soutenance orale** : commence par la `lifecycle_story.py` qui guide l'attention chapitre par chapitre, puis bascule sur `presentation.py` pour le détail technique et `app.py` pour la démo interactive. Les trois Streamlits réutilisent le même pipeline et les mêmes plots — pas de duplication de code, juste 3 angles narratifs différents.
 
 ---
 
