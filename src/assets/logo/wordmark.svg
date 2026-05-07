@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64">
+  
+  <path d="M10 20 L42 20 L26 46 Z" fill="none" stroke="#16140F" stroke-width="2.5" stroke-linejoin="miter"></path>
+  <line x1="10" y1="50" x2="42" y2="50" stroke="#16140F" stroke-width="2.5"></line>
+  <circle cx="26" cy="29" r="2" fill="#FF5B1F"></circle>
+  
+  <text x="58" y="40" font-family="Fraunces, serif" font-size="26" font-weight="500" fill="#16140F" letter-spacing="-0.5">ShopSignal</text>
+</svg>
