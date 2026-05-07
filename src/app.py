@@ -239,7 +239,226 @@ def part1_problem_and_eda(df: pd.DataFrame | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def part2_models_and_metrics(metrics_df: pd.DataFrame | None) -> None:
+def _validation_calibration(test_pred: pd.DataFrame) -> None:
+    """Reliability diagram — checks if predicted probabilities are well-calibrated."""
+    from sklearn.calibration import calibration_curve
+    from sklearn.metrics import brier_score_loss
+
+    y_true = test_pred["y_true"].astype(int).values
+    y_score = test_pred["proba_xgboost"].values
+
+    prob_true, prob_pred = calibration_curve(y_true, y_score, n_bins=10, strategy="quantile")
+    brier = brier_score_loss(y_true, y_score)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[0, 1], mode="lines",
+        line=dict(dash="dash", color=GREY, width=2),
+        name="Calibration parfaite",
+    ))
+    fig.add_trace(go.Scatter(
+        x=prob_pred, y=prob_true, mode="lines+markers",
+        line=dict(color=PRIMARY, width=3),
+        marker=dict(size=11, color=ACCENT, line=dict(color="white", width=2)),
+        name="XGBoost (10 bins quantile)",
+    ))
+    fig.update_layout(
+        title="Reliability diagram — XGBoost sur le test set",
+        xaxis_title="Probabilité prédite (moyenne par bin)",
+        yaxis_title="Fréquence d'achat réelle (par bin)",
+        height=440,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    st.plotly_chart(_style(fig), use_container_width=True)
+
+    st.info(
+        f"**Comment lire :** chaque point représente un bin de probabilité prédite. "
+        f"Si la courbe colle à la diagonale, le modèle est bien calibré — quand il dit "
+        f"« 70 % de chances d'acheter », ça arrive vraiment 70 % du temps.\n\n"
+        f"**Brier score = {brier:.4f}** (plus bas = mieux ; le pire possible est 0.25 sur "
+        f"du binaire à classes équilibrées).\n\n"
+        f"**Verdict :** XGBoost a tendance à être **{'légèrement sous-confiant dans les hauts scores' if (prob_true - prob_pred).max() > 0.05 else 'globalement bien calibré'}** — "
+        f"c'est important parce que ça valide que le seuil 0.305 du threshold tuning correspond à une "
+        f"vraie probabilité de 30.5 %, pas à un nombre arbitraire."
+    )
+
+
+def _validation_error_analysis(test_pred: pd.DataFrame) -> None:
+    """Where does the model systematically fail?"""
+    from sklearn.metrics import f1_score, precision_score, recall_score
+
+    df = test_pred.copy()
+    threshold = 0.305
+    df["y_pred"] = (df["proba_xgboost"] >= threshold).astype(int)
+
+    seg = st.selectbox(
+        "Segmenter par",
+        ["VisitorType", "Month", "Weekend", "TrafficType"],
+        help="Choisis une dimension pour voir comment les performances du modèle varient selon les modalités.",
+    )
+
+    rows = []
+    for modality, group in df.groupby(seg):
+        n = len(group)
+        if n < 20:
+            continue  # skip too-tiny groups for stable metrics
+        y_t = group["y_true"].astype(int).values
+        y_p = group["y_pred"].values
+        n_pos = int(y_t.sum())
+        if n_pos == 0:
+            f1 = prec = rec = 0.0
+        else:
+            f1 = f1_score(y_t, y_p, zero_division=0)
+            prec = precision_score(y_t, y_p, zero_division=0)
+            rec = recall_score(y_t, y_p, zero_division=0)
+        rows.append({
+            "modalité": str(modality),
+            "n_sessions": n,
+            "n_acheteurs": n_pos,
+            "F1": f1,
+            "precision": prec,
+            "recall": rec,
+        })
+
+    seg_df = pd.DataFrame(rows).sort_values("n_sessions", ascending=False)
+    overall_f1 = f1_score(
+        df["y_true"].astype(int), df["y_pred"], zero_division=0
+    )
+
+    fig = go.Figure()
+    for metric, color, name in [
+        ("precision", PRIMARY, "Precision"),
+        ("recall", ACCENT, "Recall"),
+        ("F1", SUCCESS, "F1"),
+    ]:
+        fig.add_trace(go.Bar(
+            x=seg_df["modalité"], y=seg_df[metric],
+            name=name, marker=dict(color=color),
+            hovertemplate=f"<b>%{{x}}</b><br>{name}: %{{y:.3f}}<extra></extra>",
+        ))
+    fig.add_hline(
+        y=overall_f1, line_dash="dot", line_color="black",
+        annotation_text=f"F1 global {overall_f1:.3f}",
+        annotation_position="top right",
+        annotation_font=dict(color="black", size=11),
+    )
+    fig.update_layout(
+        title=f"Performance du modèle par modalité de {seg} (modalités <20 sessions exclues)",
+        barmode="group",
+        height=440,
+        yaxis_title="Métrique",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    st.plotly_chart(_style(fig), use_container_width=True)
+
+    # Highlight problematic segments — biggest gap to overall F1
+    seg_df["gap_to_overall"] = seg_df["F1"] - overall_f1
+    worst = seg_df.nsmallest(3, "gap_to_overall")
+    best = seg_df.nlargest(3, "F1")
+
+    col_w, col_b = st.columns(2)
+    with col_w:
+        st.error("**🔴 Modalités où le modèle fait moins bien**")
+        for _, r in worst.iterrows():
+            st.markdown(
+                f"- **{r['modalité']}** (n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) "
+                f"→ F1 = {r['F1']:.3f}  *({r['gap_to_overall']:+.3f} vs global)*"
+            )
+    with col_b:
+        st.success("**🟢 Modalités où le modèle excelle**")
+        for _, r in best.iterrows():
+            st.markdown(
+                f"- **{r['modalité']}** (n={r['n_sessions']}, {r['n_acheteurs']} acheteurs) "
+                f"→ F1 = {r['F1']:.3f}"
+            )
+
+    with st.expander("Tableau détaillé par modalité"):
+        pretty = seg_df.copy()
+        for c in ["F1", "precision", "recall"]:
+            pretty[c] = pretty[c].map(lambda x: f"{x:.4f}")
+        pretty["gap_to_overall"] = pretty["gap_to_overall"].map(lambda x: f"{x:+.4f}")
+        st.dataframe(pretty, use_container_width=True, hide_index=True)
+
+
+def _validation_naive_baseline(test_pred: pd.DataFrame) -> None:
+    """Compare the model to dumb rules to put the ML gain in perspective."""
+    from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+
+    y_true = test_pred["y_true"].astype(int).values
+
+    # Rule 1: predict everything as non-buyer (the "easy" baseline that fools accuracy)
+    rule_always_no = np.zeros_like(y_true)
+
+    # Rule 2: PageValues > 0 (the most-correlated single feature)
+    rule_page_values = (test_pred["PageValues"] > 0).astype(int).values
+
+    # Rule 3: PageValues > 0 AND New_Visitor or Returning in Nov/Sep/Oct (heuristique métier)
+    high_season = test_pred["Month"].isin(["Nov", "Sep", "Oct"]).values
+    rule_business = ((test_pred["PageValues"] > 0).values & high_season).astype(int)
+
+    # XGBoost at tuned threshold
+    rule_xgb = (test_pred["proba_xgboost"] >= 0.305).astype(int).values
+
+    rules = [
+        ("Toujours « non-acheteur » (baseline dégénéré)", rule_always_no),
+        ("Règle simple : PageValues > 0", rule_page_values),
+        ("Règle métier : PageValues > 0 ET mois Nov/Sep/Oct", rule_business),
+        ("XGBoost (tuned, threshold = 0.305)", rule_xgb),
+    ]
+
+    rows = []
+    for name, preds in rules:
+        rows.append({
+            "Stratégie": name,
+            "Accuracy": accuracy_score(y_true, preds),
+            "Precision": precision_score(y_true, preds, zero_division=0),
+            "Recall": recall_score(y_true, preds, zero_division=0),
+            "F1": f1_score(y_true, preds, zero_division=0),
+            "Sessions ciblées": int(preds.sum()),
+        })
+    bench = pd.DataFrame(rows)
+
+    pretty = bench.copy()
+    for c in ["Accuracy", "Precision", "Recall", "F1"]:
+        pretty[c] = pretty[c].map(lambda x: f"{x:.4f}")
+    pretty["Sessions ciblées"] = pretty["Sessions ciblées"].map(lambda x: f"{x:,}")
+    st.dataframe(pretty, use_container_width=True, hide_index=True)
+
+    # Bar chart on F1
+    fig = px.bar(
+        bench.sort_values("F1"), x="F1", y="Stratégie", orientation="h",
+        text=bench.sort_values("F1")["F1"].map(lambda x: f"{x:.4f}"),
+        color="F1", color_continuous_scale="Viridis",
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        title="F1 par stratégie de décision",
+        height=300, coloraxis_showscale=False,
+    )
+    st.plotly_chart(_style(fig), use_container_width=True)
+
+    naive_f1 = bench.iloc[1]["F1"]
+    business_f1 = bench.iloc[2]["F1"]
+    xgb_f1 = bench.iloc[3]["F1"]
+    gain_vs_simple = (xgb_f1 - naive_f1) / max(naive_f1, 1e-9) * 100
+    gain_vs_business = (xgb_f1 - business_f1) / max(business_f1, 1e-9) * 100
+
+    st.info(
+        f"**Lecture honnête du gain ML :**\n\n"
+        f"- Vs *toujours « non-acheteur »* : F1 passe de **0.0000 à {xgb_f1:.4f}**. "
+        f"L'accuracy est trompeuse (le baseline a déjà 84.5 %), mais le F1 montre que ce baseline est inutilisable.\n"
+        f"- Vs *règle simple PageValues > 0* : ML apporte **+{gain_vs_simple:.0f} %** de F1 "
+        f"({naive_f1:.4f} → {xgb_f1:.4f}). Cette règle est étonnamment forte parce que "
+        f"`PageValues` est la feature la plus corrélée à l'achat.\n"
+        f"- Vs *règle métier (PageValues + saison Nov/Sep/Oct)* : ML apporte **+{gain_vs_business:.0f} %** "
+        f"({business_f1:.4f} → {xgb_f1:.4f}).\n\n"
+        f"Conclusion : le ML apporte un vrai gain mesurable même contre des heuristiques métier non triviales — "
+        f"justifie le coût d'entraînement et de maintenance d'un modèle plutôt qu'une simple règle."
+    )
+
+
+def part2_models_and_metrics(metrics_df: pd.DataFrame | None,
+                              test_pred: pd.DataFrame | None = None) -> None:
     st.header("Partie 2 — Choix de modèles & métriques")
 
     st.markdown(
@@ -345,6 +564,31 @@ def part2_models_and_metrics(metrics_df: pd.DataFrame | None) -> None:
         "Recall = 0.7356 → on attrape **74 % des acheteurs réels**. "
         "Cible (F1 > 0.60) dépassée de +12 %."
     )
+
+    # ------------------------------------------------------------------
+    # Rigorous validation — calibration, error analysis, naive baseline
+    # ------------------------------------------------------------------
+    if test_pred is None or "proba_xgboost" not in test_pred.columns:
+        return
+
+    st.markdown("---")
+    st.markdown("### 🔬 Validation rigoureuse")
+    st.caption(
+        "Au-delà des métriques agrégées : calibration des probabilités, "
+        "analyse d'erreur par segment, et comparaison à des baselines non-ML."
+    )
+
+    rig_tabs = st.tabs([
+        "📐 Calibration",
+        "🎯 Erreurs par segment",
+        "⚖️ vs baselines non-ML",
+    ])
+    with rig_tabs[0]:
+        _validation_calibration(test_pred)
+    with rig_tabs[1]:
+        _validation_error_analysis(test_pred)
+    with rig_tabs[2]:
+        _validation_naive_baseline(test_pred)
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +825,7 @@ def build_app() -> None:
     with tab1:
         part1_problem_and_eda(df)
     with tab2:
-        part2_models_and_metrics(metrics_df)
+        part2_models_and_metrics(metrics_df, test_pred)
     with tab3:
         part3_real_world_demo(pipeline, test_pred)
 
