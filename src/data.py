@@ -52,10 +52,14 @@ def load_dataset_split() -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Seri
     y = df[TARGET].astype(int)
     X = df.drop(columns=[TARGET])
 
-    return train_test_split(
-        X,
-        y,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE,
-        stratify=y,
+    # train_test_split returns a list — main.py validates against a tuple,
+    # so we cast explicitly to match the documented contract.
+    return tuple(
+        train_test_split(
+            X,
+            y,
+            test_size=TEST_SIZE,
+            random_state=RANDOM_STATE,
+            stratify=y,
+        )
     )

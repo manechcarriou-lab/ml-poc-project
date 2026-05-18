@@ -176,7 +176,7 @@ def build():
     s = _new_slide(prs, "TL;DR", "Ce qu'il faut retenir en 30 secondes", 2, TOTAL)
     _add_table(s, 0.5, 1.2, 12.3, 1.6,
                ["Modèle retenu", "Encoder", "Threshold", "F1 test", "ROC-AUC", "Critère"],
-               [["XGBoost", "Ordinal", "0.305", "0.6731", "0.9292", "✅ +12% vs cible 0.60"]],
+               [["XGBoost", "Ordinal", "0.305", "0.6731", "0.9292", "✓ +12% vs cible 0.60"]],
                header_size=13, body_size=14)
     box = _add_textbox(s, 0.5, 3.0, 12.3, 0.5)
     _add_text(box, "Pipeline reproductible en 4 commandes — 3 niveaux d'optimisation", size=15, bold=True, color=ACCENT)

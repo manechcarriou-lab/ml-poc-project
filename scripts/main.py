@@ -32,6 +32,16 @@ MODELS = config.MODELS
 STREAMLIT_HOST = config.STREAMLIT_HOST
 STREAMLIT_PORT = config.STREAMLIT_PORT
 
+# Make the src/ directory importable so that local modules
+# (data.py, metrics.py, features.py, app.py...) can use plain
+# `from features import ...` imports instead of relative paths.
+sys.path.insert(0, str(SRC_DIR))
+
+# Pre-load `features` so `data.py` (which does `from features import ...`)
+# can resolve it without polluting sys.path further.
+features_module = _load_module("features", SRC_DIR / "features.py")
+sys.modules["features"] = features_module
+
 data_module = _load_module("project_data", SRC_DIR / "data.py")
 metrics_module = _load_module("project_metrics", SRC_DIR / "metrics.py")
 model_io_module = _load_module("project_model_io", SRC_DIR / "model_io.py")

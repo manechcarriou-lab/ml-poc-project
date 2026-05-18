@@ -388,7 +388,7 @@ def section_cover() -> None:
         ' background: rgba(236, 72, 153, 0.2); border-radius: 50%; filter: blur(50px);"></div>'
         '<div style="position: relative; z-index: 1;">'
         '<div style="font-size: 0.78rem; font-weight: 700; letter-spacing: 0.28rem; opacity: 0.85;">'
-        '✨ MACHINE LEARNING · PROOF OF CONCEPT · ALBERT SCHOOL'
+        '· MACHINE LEARNING · PROOF OF CONCEPT · ALBERT SCHOOL'
         '</div>'
         '<div style="font-size: 2.8rem; font-weight: 800; margin-top: 1.2rem; line-height: 1.1; letter-spacing: -0.02em;">'
         "Prédire la conversion d'un visiteur e-commerce"
@@ -397,11 +397,11 @@ def section_cover() -> None:
         "Du repo vide au modèle XGBoost en production — un récit visuel, end-to-end, anti-leakage."
         '</div>'
         '<div style="margin-top: 1.8rem; font-size: 0.9rem; opacity: 0.85; display: flex; gap: 1.2rem; flex-wrap: wrap;">'
-        '<span>👤 Manech Carriou</span>'
+        '<span>· Manech Carriou</span>'
         '<span>·</span>'
-        '<span>🎓 Albert School</span>'
+        '<span>· Albert School</span>'
         '<span>·</span>'
-        '<span>🔗 github.com/manechcarriou-lab/ml-poc-project</span>'
+        '<span>· github.com/manechcarriou-lab/ml-poc-project</span>'
         '</div>'
         '</div>'
         '</div>'
@@ -439,8 +439,8 @@ def section_cover() -> None:
             ("Streamlit", "default"),
             ("ColumnTransformer", "default"),
             ("TunedThresholdClassifierCV", "accent"),
-            ("✅ Anti-leakage", "success"),
-            ("✅ Reproductible", "success"),
+            ("✓ Anti-leakage", "success"),
+            ("✓ Reproductible", "success"),
         ]
     )
 
@@ -650,10 +650,10 @@ def section_eda(df: pd.DataFrame | None) -> None:
 
     tabs = st.tabs(
         [
-            "🎯 Class imbalance",
-            "📊 Conversion par segment",
-            "🔍 Outliers (IQR)",
-            "📈 Corrélations",
+            "· Class imbalance",
+            "· Conversion par segment",
+            "· Outliers (IQR)",
+            "· Corrélations",
         ]
     )
 
@@ -1236,19 +1236,19 @@ def section_results(metrics_df: pd.DataFrame | None) -> None:
 
 # Preset profiles — calibrated to produce sensible probas
 DEMO_PRESETS = {
-    "👜 Acheteur engagé": {
+    " Acheteur engagé": {
         "demo_pp": 60, "demo_pd": 2400, "demo_pv": 90.0,
         "demo_br": 0.004, "demo_er": 0.012, "demo_ap": 4,
         "demo_inf": 1, "demo_inf_d": 80.0,
         "demo_vt": "New_Visitor", "demo_m": "Nov", "demo_we": False,
     },
-    "🤔 Visiteur curieux": {
+    " Visiteur curieux": {
         "demo_pp": 25, "demo_pd": 800, "demo_pv": 6.0,
         "demo_br": 0.02, "demo_er": 0.04, "demo_ap": 2,
         "demo_inf": 1, "demo_inf_d": 30.0,
         "demo_vt": "Returning_Visitor", "demo_m": "May", "demo_we": True,
     },
-    "🏃 Touriste pressé": {
+    " Touriste pressé": {
         "demo_pp": 3, "demo_pd": 40, "demo_pv": 0.0,
         "demo_br": 0.18, "demo_er": 0.19, "demo_ap": 0,
         "demo_inf": 0, "demo_inf_d": 0.0,
@@ -1336,7 +1336,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
     # ------------------------------------------------------------------
     # Quick start: presets + random sample
     # ------------------------------------------------------------------
-    st.markdown("##### ⚡ Quick start — pré-remplir les sliders")
+    st.markdown("#####  Quick start — pré-remplir les sliders")
     cols = st.columns([1, 1, 1, 1])
     for col, (label, preset) in zip(cols[:3], DEMO_PRESETS.items()):
         if col.button(label, use_container_width=True, key=f"preset_{label}"):
@@ -1344,7 +1344,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
                 st.session_state[k] = v
             st.rerun()
 
-    if cols[3].button("🎲 Échantillon réel (test set)", use_container_width=True, key="demo_random"):
+    if cols[3].button(" Échantillon réel (test set)", use_container_width=True, key="demo_random"):
         if test_pred is not None and len(test_pred) > 0:
             sample = test_pred.sample(1, random_state=np.random.randint(0, 10_000)).iloc[0]
             st.session_state["demo_pp"] = int(sample.get("ProductRelated", 30))
@@ -1421,7 +1421,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
         st.error(f"Erreur de prédiction : {e}")
         return
 
-    decision_emoji = "🟢" if proba >= threshold else "⚪"
+    decision_emoji = "+" if proba >= threshold else "-"
     decision_text = "Cibler — action marketing recommandée" if proba >= threshold else "Ne pas cibler"
     confidence = abs(proba - 0.5) * 2  # 0 = pile à 0.5, 1 = très confiant
 
@@ -1462,8 +1462,8 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
         st.markdown(f"### {decision_emoji} {decision_text}")
         truth = st.session_state.get("_demo_truth")
         if truth is not None:
-            actual = "🛒 ACHAT" if truth == 1 else "❌ Pas d'achat"
-            correct = "✅ Bien classé" if (proba >= threshold) == (truth == 1) else "⚠️ Mal classé"
+            actual = " ACHAT" if truth == 1 else "✗ Pas d'achat"
+            correct = "✓ Bien classé" if (proba >= threshold) == (truth == 1) else "! Mal classé"
             st.markdown(
                 f"**Vérité terrain** (échantillon test) : {actual}  \n{correct}"
             )
@@ -1472,7 +1472,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
     # Two analysis tabs: probability context + SHAP
     # ------------------------------------------------------------------
     add_vertical_space(1)
-    tabs = st.tabs(["📈 Position dans la distribution", "🔬 Explication SHAP", "💼 Décision business"])
+    tabs = st.tabs(["· Position dans la distribution", "· Explication SHAP", "· Décision business"])
 
     with tabs[0]:
         if test_pred is not None and "proba_xgboost" in test_pred.columns:
@@ -1540,7 +1540,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
         c1, c2, c3 = st.columns(3)
         if proba >= threshold:
             with c1:
-                _kpi("Action recommandée", "🟢 Cibler")
+                _kpi("Action recommandée", "+ Cibler")
             with c2:
                 _kpi("Coût attendu", "Faible")
             with c3:
@@ -1553,7 +1553,7 @@ def section_demo(pipeline, test_pred: pd.DataFrame | None = None) -> None:
             )
         else:
             with c1:
-                _kpi("Action recommandée", "⚪ Ne pas cibler")
+                _kpi("Action recommandée", "- Ne pas cibler")
             with c2:
                 _kpi("Économie", "Budget marketing")
             with c3:
@@ -1609,7 +1609,7 @@ def section_conclusion() -> None:
     st.markdown("### Prochaines étapes")
     cols = st.columns(3)
     with cols[0]:
-        st.markdown("#### 🟢 Court terme")
+        st.markdown("#### + Court terme")
         st.markdown(
             """
             - Calibration de probabilités (`CalibratedClassifierCV`)
@@ -1618,7 +1618,7 @@ def section_conclusion() -> None:
             """
         )
     with cols[1]:
-        st.markdown("#### 🟡 Moyen terme")
+        st.markdown("#### ~ Moyen terme")
         st.markdown(
             """
             - A/B test prod : threshold 0.305 vs 0.5
@@ -1627,7 +1627,7 @@ def section_conclusion() -> None:
             """
         )
     with cols[2]:
-        st.markdown("#### 🔴 Long terme")
+        st.markdown("#### - Long terme")
         st.markdown(
             """
             - Modèles séquentiels (LSTM, Transformer)
@@ -1673,7 +1673,7 @@ def build_app() -> None:
     st.set_page_config(
         page_title="Online Shoppers — Présentation",
         layout="wide",
-        page_icon="🛒",
+        page_icon="",
         initial_sidebar_state="expanded",
     )
     _inject_css()
@@ -1689,7 +1689,7 @@ def build_app() -> None:
     with st.sidebar:
         sidebar_html = (
             '<div style="text-align: center; padding: 1.4rem 0 1rem 0;">'
-            '<div style="font-size: 2rem;">🛒</div>'
+            '<div style="font-size: 2rem;"></div>'
             '<div style="font-size: 1.1rem; font-weight: 800; color: white; margin-top: 0.3rem;">ML PoC</div>'
             '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); letter-spacing: 0.18rem; '
             'text-transform: uppercase; margin-top: 0.2rem;">Présentation</div>'

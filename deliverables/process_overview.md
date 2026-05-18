@@ -64,11 +64,11 @@ Les sites e-commerce convertissent en moyenne **1 à 3 %** de leurs visiteurs. I
 
 | Critère | Vérifié |
 |---|---|
-| Public et stable | ✅ UCI |
-| Taille manageable (entraînement local) | ✅ ~1 MB |
-| Cible business claire | ✅ achat / pas achat |
-| Features réalistes (pages vues, durée, page values, mois…) | ✅ |
-| Réaliste : dataset déséquilibré (85/15) | ✅ — vrai défi métrique |
+| Public et stable | ✓ UCI |
+| Taille manageable (entraînement local) | ✓ ~1 MB |
+| Cible business claire | ✓ achat / pas achat |
+| Features réalistes (pages vues, durée, page values, mois…) | ✓ |
+| Réaliste : dataset déséquilibré (85/15) | ✓ — vrai défi métrique |
 
 ### 2.3 Limites assumées
 
@@ -324,7 +324,7 @@ XGBoost domine sur les deux courbes. Sur la PR curve, la précision reste >0.70 
 
 > *Atteindre F1 > 0.60 sur la classe positive avec le meilleur modèle.*
 
-✅ **XGBoost atteint F1 = 0.6731**, soit +**12 %** au-dessus du seuil cible.
+✓ **XGBoost atteint F1 = 0.6731**, soit +**12 %** au-dessus du seuil cible.
 
 ### 8.5 Threshold tuning — désormais intégré au pipeline
 

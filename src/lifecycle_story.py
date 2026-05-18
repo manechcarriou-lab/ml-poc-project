@@ -421,7 +421,7 @@ def chapter_03() -> None:
     with col_bad:
         st.markdown(
             """<div class="leakage-card bad">
-                <div class="kicker">❌ Mauvaise pratique</div>
+                <div class="kicker">✗ Mauvaise pratique</div>
                 <h4>Standardiser avant le split</h4>
                 <div class="step">scaler.fit_transform(X_full)</div>
                 <div class="step">→ train_test_split(X_scaled)</div>
@@ -674,7 +674,7 @@ def chapter_07(pipeline, test_pred: pd.DataFrame | None) -> None:
         st.warning("Modèle ou prédictions test introuvables.")
         return
 
-    if st.button("▶️  Lancer la simulation", type="primary"):
+    if st.button(">  Lancer la simulation", type="primary"):
         # Pick 5 diverse sessions: 2 buyers + 3 non-buyers
         buyers = test_pred[test_pred["y_true"] == 1].sample(2, random_state=7)
         non_buyers = test_pred[test_pred["y_true"] == 0].sample(3, random_state=11)
@@ -692,13 +692,13 @@ def chapter_07(pipeline, test_pred: pd.DataFrame | None) -> None:
             month = str(row["Month"])
 
             if decision and truth == 1:
-                cls, label, mark = "target", "🟢 CIBLER", "✓ acheteur réel"
+                cls, label, mark = "target", "+ CIBLER", "✓ acheteur réel"
             elif decision and truth == 0:
-                cls, label, mark = "miss", "🟡 CIBLER", "✗ pas acheteur"
+                cls, label, mark = "miss", "~ CIBLER", "✗ pas acheteur"
             elif not decision and truth == 1:
-                cls, label, mark = "miss", "⚪ ignore", "✗ acheteur raté"
+                cls, label, mark = "miss", "- ignore", "✗ acheteur raté"
             else:
-                cls, label, mark = "skip", "⚪ ignore", "✓ pas acheteur"
+                cls, label, mark = "skip", "- ignore", "✓ pas acheteur"
 
             line = (
                 f'<div class="live-decision {cls}">'
@@ -758,7 +758,7 @@ def build_app() -> None:
     st.set_page_config(
         page_title="ML Lifecycle Story — Online Shoppers",
         layout="centered",
-        page_icon="📖",
+        page_icon="",
         initial_sidebar_state="collapsed",
     )
     _inject_css()

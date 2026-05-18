@@ -1,4 +1,4 @@
-# 🛒 Prédire la conversion d'un visiteur e-commerce
+#  Prédire la conversion d'un visiteur e-commerce
 ## Rapport complet — du repo vide au modèle XGBoost en production
 
 ---
@@ -10,21 +10,21 @@
 
 ---
 
-## 🎬 Quatre manières de découvrir ce projet
+## · Quatre manières de découvrir ce projet
 
 | Format | Pour qui | Comment |
 |---|---|---|
-| **📖 ML Lifecycle Story** (signature) | Soutenance immersive — raconter le projet comme une histoire | `streamlit run src/lifecycle_story.py` |
-| **📊 Dashboard de présentation** | Démo orale interactive, navigation par sections | `streamlit run src/presentation.py` |
-| **🛒 Dashboard 3-parties** (To-Do 5) | Démo simple problème → modèles → demo | `streamlit run src/app.py` |
-| **🎤 Slides PowerPoint / PDF** | Soutenance traditionnelle, partage hors ligne | `deliverables/process_overview.pptx` (16 slides) |
-| **📄 Rapport texte** (ce document) | Lecture asynchrone, référence détaillée | `deliverables/RAPPORT_COMPLET.md` |
+| ** ML Lifecycle Story** (signature) | Soutenance immersive — raconter le projet comme une histoire | `streamlit run src/lifecycle_story.py` |
+| **· Dashboard de présentation** | Démo orale interactive, navigation par sections | `streamlit run src/presentation.py` |
+| ** Dashboard 3-parties** (To-Do 5) | Démo simple problème → modèles → demo | `streamlit run src/app.py` |
+| **· Slides PowerPoint / PDF** | Soutenance traditionnelle, partage hors ligne | `deliverables/process_overview.pptx` (16 slides) |
+| **· Rapport texte** (ce document) | Lecture asynchrone, référence détaillée | `deliverables/RAPPORT_COMPLET.md` |
 
 > Pour une **soutenance orale** : commence par la `lifecycle_story.py` qui guide l'attention chapitre par chapitre, puis bascule sur `presentation.py` pour le détail technique et `app.py` pour la démo interactive. Les trois Streamlits réutilisent le même pipeline et les mêmes plots — pas de duplication de code, juste 3 angles narratifs différents.
 
 ---
 
-## 🎯 En 30 secondes
+## · En 30 secondes
 
 | Question | Réponse |
 |---|---|
@@ -728,7 +728,7 @@ Au seuil **0.305** retenu pour XGBoost en production :
 
 > **Cible initiale :** F1 > 0.60 sur la classe positive avec le meilleur modèle.
 
-✅ **XGBoost atteint F1 = 0.6731 → +12 % au-dessus de la cible.**
+✓ **XGBoost atteint F1 = 0.6731 → +12 % au-dessus de la cible.**
 
 ---
 

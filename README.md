@@ -1,238 +1,224 @@
-# ML Project Template
+# Online Shoppers Conversion Prediction
 
-This repository is the base template that each student will fork and adapt for the final machine learning proof-of-concept project.
+> A machine-learning proof of concept that predicts, from a single web session, whether
+> a visitor will complete a purchase on an e-commerce site. Trained on the **UCI Online
+> Shoppers Purchasing Intention** dataset (~12,330 sessions, 17 features, 15.5 %
+> positive class). Best model: **XGBoost + Ordinal encoding + CV-tuned threshold 0.305**,
+> reaching **F1 = 0.6731** and **ROC-AUC = 0.9292** on the held-out test set.
+>
+> *Author: Manech Carriou — Albert School — Machine Learning course (PoC).*
 
-The template already defines the project structure and the main execution workflow. Your job as a student is to plug your own dataset loading logic, trained models, evaluation metrics, and Streamlit presentation into the fixed contracts described below.
+---
 
-## Repository Structure
+## What this project does
 
-- `deliverables/`: markdown files containing all assignements
-- `deliverables/assignement1.md`: first assignement due (5 in total)
-- `data/`: raw and processed data files
-- `logs/`: log files generated during execution
-- `models/`: trained machine learning models saved to disk
-- `notebooks/`: Jupyter notebooks for analysis and experimentation
-- `plots/`: generated visualizations
-- `results/`: evaluation outputs, including model comparison tables
-- `scripts/`: executable project scripts
-- `scripts/main.py`: main entry point for evaluating models and launching the app
-- `src/`: project source code
-- `src/config.py`: project paths, model registry, and Streamlit configuration
-- `src/data.py`: student-implemented dataset loading function
-- `src/metrics.py`: student-implemented metric computation function
-- `src/app.py`: fixed Streamlit entry point that students must customize
-- `tests/`: optional tests
-- `.env`: environment variables if your project needs them
+E-commerce sites convert 1 to 3 % of their visitors. The other 97 % leave without
+buying. Growth and CRM teams have to decide, in real time, which sessions are worth
+spending budget on (retargeting, pop-ups, coupons, live-chat triggers) and which
+should be ignored.
 
-## Expected Workflow
+This project frames that decision as a **binary classification problem**:
 
-When you run:
+> *Given the features of a web session as it unfolds, can we predict whether it will
+> result in a purchase?*
 
-```bash
-python scripts/main.py
-```
+The deliverable is an interactive Streamlit dashboard structured in three parts:
 
-the template will do the following:
+1. **Problem & EDA** — the business context, the dataset, and the exploratory plots
+   that motivated every preprocessing decision.
+2. **Models & metrics** — three model families (Logistic Regression, Random Forest,
+   XGBoost) trained inside an anti-leakage sklearn `Pipeline`, hyperparameter search
+   with **Optuna**, experiment tracking with **MLflow**, automated **threshold tuning**
+   with `TunedThresholdClassifierCV`, plus a *rigorous validation* section (calibration
+   reliability diagram, error analysis by segment, comparison against non-ML baselines).
+3. **Live demo** — a session-level simulator: adjust the inputs, see the probability
+   of purchase predicted by the production XGBoost pipeline, and watch the ROI
+   decomposition on the full test set update in real time as you move the decision
+   threshold.
 
-1. read the list of trained models from `src/config.py`,
-2. call your dataset loading function from `src/data.py`,
-3. load each serialized model from `models/`,
-4. run predictions on the test split,
-5. call your metric computation function from `src/metrics.py`,
-6. save the results to `results/model_metrics.csv`,
-7. print the metrics in the terminal,
-8. launch the Streamlit app on `localhost`.
+---
 
-## What You Must Update
-
-### 1. Register your trained models in `src/config.py`
-
-Replace the example `MODELS` dictionary with your own trained models.
-
-Each entry must define at least:
-
-- `name`
-- `description`
-- `path`
-
-Example:
-
-```python
-MODELS = {
-    "log_reg": {
-        "name": "Logistic Regression",
-        "description": "Baseline classifier with standardized features.",
-        "path": MODELS_DIR / "log_reg.joblib",
-    },
-    "rf": {
-        "name": "Random Forest",
-        "description": "Tree ensemble tuned on the validation split.",
-        "path": MODELS_DIR / "random_forest.pkl",
-    },
-}
-```
-
-Supported model formats are:
-
-- `.joblib`
-- `.pkl`
-- `.pickle`
-
-Each saved object must expose a `.predict(X)` method.
-
-### 2. Implement the dataset loading function in `src/data.py`
-
-The file already exists and must keep this function name and signature:
-
-```python
-def load_dataset_split() -> tuple[Any, Any, Any, Any]:
-```
-
-It must return:
-
-```python
-(X_train, X_test, y_train, y_test)
-```
-
-Constraints:
-
-- `X_train` and `X_test` must be in a format accepted by every model in `MODELS`
-- `y_train` and `y_test` must contain the matching targets
-- `X_test` and `y_test` will be used by `scripts/main.py` for evaluation
-- Typical return types are `pandas.DataFrame`, `pandas.Series`, and/or `numpy.ndarray`
-
-Minimal example:
-
-```python
-import pandas as pd
-from sklearn.model_selection import train_test_split
-
-from config import DATA_DIR
-
-
-def load_dataset_split():
-    df = pd.read_csv(DATA_DIR / "processed_dataset.csv")
-    X = df.drop(columns=["target"])
-    y = df["target"]
-    return train_test_split(X, y, test_size=0.2, random_state=42)
-```
-
-### 3. Implement the metric computation function in `src/metrics.py`
-
-The file already exists and must keep this function name and signature:
-
-```python
-def compute_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
-```
-
-It must return a dictionary mapping metric names to numeric values.
-
-Example:
-
-```python
-from sklearn.metrics import accuracy_score, f1_score
-
-
-def compute_metrics(y_true, y_pred):
-    return {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "f1": f1_score(y_true, y_pred, average="weighted"),
-    }
-```
-
-Constraints:
-
-- Use the same metric names for all evaluated models
-- Every metric value must be numeric and convertible to `float`
-- The returned dictionary is written directly to `results/model_metrics.csv`
-
-### 4. Customize the Streamlit application in `src/app.py`
-
-The file `src/app.py` is the fixed Streamlit entry point used by `scripts/main.py`.
-
-Keep this function name:
-
-```python
-def build_app() -> None:
-```
-
-You should update the placeholder app to present:
-
-- the business objective,
-- the dataset and key insights,
-- your visualizations,
-- model comparison results,
-- any prediction demo or interactive workflow relevant to your project.
-
-The template app already tries to display `results/model_metrics.csv` if it exists.
-
-## Recommended Student Workflow
-
-1. Fork this repository.
-2. Create and activate your virtual environment.
-3. Install dependencies:
+## Quick start
 
 ```bash
+git clone git@github.com:manechcarriou-lab/ml-poc-project.git
+cd ml-poc-project
+
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
-```
-
-The template also reads `project-repo/.env` with `python-dotenv`. By default it contains:
-
-```text
-PYTHONPATH=./src
-```
-
-This is used when `scripts/main.py` launches Streamlit so modules inside `src/` resolve as top-level imports such as `from config import ...` or `from app import build_app`.
-
-4. Add your data files to `data/`.
-5. Train and save your models into `models/`.
-6. Update `src/config.py`.
-7. Implement `src/data.py`.
-8. Implement `src/metrics.py`.
-9. Customize `src/app.py`.
-10. Run the full project:
-
-```bash
 python scripts/main.py
 ```
 
-## Output Produced by the Template
+`scripts/main.py` evaluates the saved models on the test split, writes
+`results/model_metrics.csv`, then launches the Streamlit dashboard on
+[http://localhost:8501](http://localhost:8501).
 
-After a successful run, you should have:
+### Alternative entry points
 
-- printed metrics in the terminal,
-- a CSV file at `results/model_metrics.csv`,
-- a Streamlit app running locally, by default at:
+| File | Purpose | Command |
+|------|---------|---------|
+| `src/app.py` | Main dashboard (ShopSignal design system) — flagship UI | `streamlit run src/app.py` |
+| `src/presentation.py` | Multi-section presentation dashboard (sidebar nav, shadcn UI) | `streamlit run src/presentation.py` |
+| `src/lifecycle_story.py` | Editorial scrollytelling — the project as a long-form story | `streamlit run src/lifecycle_story.py` |
+| `scripts/train.py` | Retrain all three model families with Optuna + threshold tuning | `python scripts/train.py --trials 15` |
+| `scripts/generate_plots.py` | Regenerate every PNG in `plots/` and `results/test_predictions.csv` | `python scripts/generate_plots.py` |
+| `scripts/build_slides.py` | Rebuild `deliverables/process_overview.pptx` (16 slides) | `python scripts/build_slides.py` |
+| `mlflow ui` | Inspect all training runs (params + metrics + artifacts) | `mlflow ui --backend-store-uri ./mlruns` |
 
-```text
-http://localhost:8501
+### Tests
+
+```bash
+python -m unittest tests/test_pipeline.py -v
 ```
 
-## Common Errors
+Seven smoke tests covering the split sizes, stratification, presence of the engineered
+features, absence of target leakage, the leakage-safety of the preprocessor, the
+metrics contract, and the round-trip prediction of every saved model.
 
-### `NotImplementedError` from `data`
+---
 
-You have not implemented `load_dataset_split()` yet.
+## Repository structure
 
-### `NotImplementedError` from `metrics`
+```
+ml-poc-project/
+├── data/                  # raw UCI dataset (gitignored, see "Getting the data")
+├── deliverables/          # written deliverables for the course
+│   ├── assignment1.md     # project proposal
+│   ├── RAPPORT_COMPLET.md # full A-to-Z report
+│   ├── process_overview.md  # condensed walkthrough
+│   └── process_overview.pptx  # 16-slide deck
+├── mlruns/                # MLflow tracking (gitignored)
+├── models/                # trained joblib pipelines (gitignored, rebuild via train.py)
+├── notebooks/
+│   ├── data_exploration.ipynb     # the full EDA
+│   ├── feature_engineering.ipynb  # PCA + feature comparison + RF importance
+│   └── encoding_comparison.ipynb  # OneHot vs Ordinal vs TargetEncoder vs skrub
+├── plots/                 # PNGs embedded in docs and slides (committed)
+├── results/               # model_metrics.csv + test_predictions.csv (committed)
+├── scripts/
+│   ├── main.py            # evaluate + launch Streamlit (template entry point)
+│   ├── train.py           # Optuna + MLflow + threshold tuning
+│   ├── generate_plots.py  # regenerate every plot and the metrics CSVs
+│   └── build_slides.py    # rebuild process_overview.pptx
+├── src/
+│   ├── app.py             # Streamlit dashboard (3 parts) — flagship
+│   ├── presentation.py    # alternate presentation dashboard
+│   ├── lifecycle_story.py # alternate scrollytelling
+│   ├── config.py          # paths and MODELS registry
+│   ├── data.py            # load_dataset_split (stratified 80/20)
+│   ├── features.py        # ColumnTransformer pipeline (parametrable encoder)
+│   ├── metrics.py         # compute_metrics — F1, precision, recall, ROC-AUC
+│   ├── model_io.py        # joblib helpers (template)
+│   ├── results.py         # write_metrics (template)
+│   └── assets/logo/       # ShopSignal brand SVGs
+├── tests/
+│   └── test_pipeline.py   # 7 smoke tests
+└── requirements.txt
+```
 
-You have not implemented `compute_metrics()` yet.
+---
 
-### `FileNotFoundError` for a model path
+## Methodology in one paragraph
 
-One of the model files declared in `src/config.py` does not exist in `models/`.
+The same anti-leakage `Pipeline` (sklearn `ColumnTransformer` + classifier) is used
+for every model: numeric features go through `log1p` (when skewed) then
+`StandardScaler`; categorical features use the encoder that empirically works best
+for the model family (`OneHotEncoder` for the linear and tree-based models,
+`OrdinalEncoder` for XGBoost, as validated in `notebooks/encoding_comparison.ipynb`).
+Optuna runs 15 trials per family with 3-fold stratified cross-validation, optimising
+F1 on the positive class. The fitted pipeline is then wrapped in
+`TunedThresholdClassifierCV(scoring="f1", cv=5)`, so the decision threshold is
+learned on the train split only (anti-leakage by construction). Every trial is logged
+to MLflow; the best run per family is saved as `models/<family>.joblib`.
 
-### Model has no `predict` method
+**Headline result:** XGBoost with Ordinal encoding and a threshold of 0.305 reaches
+F1 = 0.6731, recall = 0.7356 (74 % of buyers caught), precision = 0.6203,
+ROC-AUC = 0.9292 on the 2,466-session test set. That's +12 % above the PoC target
+of F1 > 0.60.
 
-The object loaded from disk is not a trained model compatible with the template evaluation flow.
+---
 
-### Streamlit starts but shows only the placeholder page
+## Getting the data
 
-You still need to customize `src/app.py` with your project content.
+The raw CSV is not committed (only a `.gitkeep` placeholder lives in `data/`). To
+materialise it locally, pick one of the two methods below.
 
-## Notes
+### Method 1 — Direct download (recommended)
 
-- Keep `scripts/main.py` as the main orchestration entry point.
-- Keep the function names and signatures in `src/data.py`, `src/metrics.py`, and `src/app.py` unchanged.
-- Save your trained models before running the template.
-- Use the same evaluation logic for all registered models so the comparison remains fair.
+On Linux / macOS:
+
+```bash
+mkdir -p data
+curl -L -o data/online_shoppers.zip \
+  "https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip"
+cd data && unzip online_shoppers.zip && cd ..
+ls -lh data/online_shoppers_intention.csv
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force data | Out-Null
+Invoke-WebRequest -Uri "https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip" `
+                  -OutFile "data\online_shoppers.zip"
+Expand-Archive -Path "data\online_shoppers.zip" -DestinationPath "data" -Force
+```
+
+You should now have `data/online_shoppers_intention.csv` (≈ 1 MB, 12,330 rows).
+
+### Method 2 — Via the `ucimlrepo` Python package
+
+```bash
+pip install ucimlrepo
+```
+
+```python
+from ucimlrepo import fetch_ucirepo
+import pandas as pd
+
+ds = fetch_ucirepo(id=468)
+df = pd.concat([ds.data.features, ds.data.targets], axis=1)
+df.to_csv("data/online_shoppers_intention.csv", index=False)
+```
+
+### Dataset specifications
+
+| | |
+|---|---|
+| **Name** | Online Shoppers Purchasing Intention Dataset |
+| **Source** | [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset) |
+| **Licence** | CC BY 4.0 |
+| **Rows** | 12,330 sessions |
+| **Columns** | 18 (10 numeric + 7 categorical + 1 boolean target) |
+| **Target** | `Revenue` (boolean) — did the session end with a purchase? |
+| **Positive rate** | 15.5 % — heavy class imbalance |
+| **File size** | ≈ 1 MB CSV |
+| **Citation** | Sakar, C.O. & Kastro, Y. (2018). *Online Shoppers Purchasing Intention Dataset*. UCI Machine Learning Repository. |
+
+### Once the data is in place
+
+You have two paths:
+
+1. Run `python scripts/train.py --trials 15` to retrain all three model families
+   from scratch (≈ 5–8 minutes on a laptop CPU). This regenerates the joblibs in
+   `models/`.
+2. Or skip training and only use the cached predictions in
+   `results/test_predictions.csv` to explore the dashboard — most of the UI works
+   without the joblibs (the live-scoring section is the only one that requires them).
+
+Either way, `python scripts/main.py` is the single command that brings everything
+together: it evaluates the registered models on the test split, writes
+`results/model_metrics.csv`, then launches Streamlit.
+
+---
+
+## Credits
+
+Template repository by **Thomas Milcent** ([@thom1100](https://github.com/thom1100)),
+Albert School Machine Learning course (2026). All ML work, deliverables, and the
+ShopSignal design wrapper are by **Manech Carriou**.
